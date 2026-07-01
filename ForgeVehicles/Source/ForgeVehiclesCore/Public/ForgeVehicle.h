@@ -7,10 +7,13 @@
 #include "Components/ForgeEngineIgnitionComponent.h"
 #include "Interfaces/ForgeVehicleMovementInterface.h"
 #include "ForgeVehicleTypes.h"
+#include "Interface/TBIA_Interactable.h"
 #include "ForgeVehicle.generated.h"
 
 class USkeletalMeshComponent;
 class UForgeVehicleExitPoint;
+class UForgeVehicleRunOverComponent;
+class UArcInventoryComponent;
 class UInputAction;
 class UInputMappingContext;
 struct FInputActionValue;
@@ -28,13 +31,28 @@ struct FInputActionValue;
  * fixed-wing / water-craft modules only have to supply their propulsion and point the base at it.
  */
 UCLASS(Abstract)
-class FORGEVEHICLESCORE_API AForgeVehicle : public AForgeBaseVehicle
+class FORGEVEHICLESCORE_API AForgeVehicle : public AForgeBaseVehicle, public ITBIA_Interactable
 {
 	GENERATED_BODY()
 
 public:
 
 	AForgeVehicle(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	//~ Begin ITBIA_Interactable (Twisted Bytes Interaction System)
+	/* Vehicles are interactable by default; override/extend for locked or destroyed states. */
+	virtual bool IsAvailableForInteraction_Implementation(const UPrimitiveComponent* InteractedComponent, const AActor* InteractingActor) const override;
+	/* On a completed interaction, seat the interacting actor's player in the first open seat. */
+	virtual void OnPostInteract_Implementation(const AActor* InteractingActor, const UPrimitiveComponent* InteractedComponent) override;
+	//~ End ITBIA_Interactable
+
+	/* Blueprint hook fired after a successful interaction, before the default "enter seat" behaviour. */
+	UFUNCTION(BlueprintImplementableEvent, Category = "ForgeVehicle|Interaction")
+	void OnVehicleInteracted(AActor* InteractingActor);
+
+	/* The vehicle's inventory (cargo / stored items). */
+	UForgeVehicleRunOverComponent* GetRunOverComponent() const { return RunOverComponent; }
+	UArcInventoryComponent* GetVehicleInventory() const { return VehicleInventory; }
 
 	//~ Begin AActor interface
 	virtual void PostInitializeComponents() override;
@@ -93,6 +111,14 @@ public:
 	/* Replicated engine ignition state machine. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UForgeEngineIgnitionComponent* IgnitionComponent;
+
+	/* Detects and damages pawns the vehicle runs over. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UForgeVehicleRunOverComponent* RunOverComponent;
+
+	/* Arc Inventory storage carried by the vehicle (cargo / mounted equipment). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UArcInventoryComponent* VehicleInventory;
 
 protected:
 

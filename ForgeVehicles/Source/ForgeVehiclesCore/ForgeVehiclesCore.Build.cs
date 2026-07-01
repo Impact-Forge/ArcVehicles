@@ -20,6 +20,13 @@ public class ForgeVehiclesCore : ModuleRules
 				"NetCore",
 				"InputCore",
 				"EnhancedInput",
+				// GAS stack required by the Twisted Bytes interaction interface and Arc Inventory.
+				"GameplayAbilities",
+				"GameplayTags",
+				"GameplayTasks",
+				// External plugin integrations wired onto the core vehicle.
+				"TBIA_Runtime",
+				"ArcInventory",
 			}
 			);
 

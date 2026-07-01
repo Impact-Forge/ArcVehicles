@@ -77,5 +77,29 @@ AForgeVehiclePawn                         (APawn)
 * Water-craft networking is intentionally simple (authority/local-driver applies forces; ignition
   replicates the running state); extend as needed for your netcode.
 
+## Gameplay integrations (on the Core vehicle)
+
+The Core `AForgeVehicle` base — and therefore every vehicle type — ships with:
+
+* **Gunner seats** — `AForgeVehicleGunner` (Core `Seats/`), a Forge-formatted port of the BurningLands
+  `ABLVehicleGunner`. It is a possessable seat pawn that drives its own camera from the control
+  rotation and feeds Enhanced-Input mouse look into controller yaw/pitch (pair with the turret
+  movement component to aim a mounted weapon).
+* **Run-over collision** — `UForgeVehicleRunOverComponent` (Core `Components/`) auto-attached to every
+  vehicle. It watches the vehicle's collision primitive for hits/overlaps with pawns, and above
+  `MinRunOverSpeed` applies (speed-scaled) point damage on the authority and broadcasts
+  `OnRunOverActor`. Other vehicles are ignored; the target class filter defaults to `APawn`.
+* **Twisted Bytes interaction** — `AForgeVehicle` implements `ITBIA_Interactable`, so a player can walk
+  up and interact to board: the default `OnPostInteract` seats the interacting actor's player in the
+  first open seat (fire `OnVehicleInteracted` in Blueprint to customise). Requires the
+  TwistedBytes Interaction System plugin.
+* **Arc Inventory** — every vehicle carries a `UArcInventoryComponent` (`VehicleInventory`) for cargo /
+  mounted equipment. Requires the Arc Inventory plugin.
+
+Because the interaction and inventory integrations live on the Core base, `ForgeVehiclesCore` now
+depends on the TwistedBytes Interaction System, Arc Inventory and the GAS stack (GameplayAbilities /
+GASCompanion). Those plugins must be present in the project for Forge Vehicles to build.
+
 Credits: Arc Vehicles by Puny Human & Garrett Fleenor; RTune and K2 Aircraft physics by Kallisto;
-consolidation, Core foundations and water craft by Impact-Forge.
+Interaction System by twistedbytes.net; Arc Inventory by Puny Human; consolidation, Core foundations
+and water craft by Impact-Forge.

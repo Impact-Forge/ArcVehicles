@@ -5,8 +5,12 @@
 #include "ForgeVehicleExitPoint.h"
 #include "Interfaces/ForgeVehicleMovementInterface.h"
 #include "Seats/ForgeSeatConfig.h"
+#include "Components/ForgeVehicleRunOverComponent.h"
+#include "ArcInventoryComponent.h"
 
 #include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/LocalPlayer.h"
 
@@ -45,6 +49,30 @@ AForgeVehicle::AForgeVehicle(const FObjectInitializer& ObjectInitializer)
 	}
 
 	IgnitionComponent = CreateDefaultSubobject<UForgeEngineIgnitionComponent>(TEXT("IgnitionComponent"));
+
+	RunOverComponent = CreateDefaultSubobject<UForgeVehicleRunOverComponent>(TEXT("RunOverComponent"));
+
+	VehicleInventory = CreateDefaultSubobject<UArcInventoryComponent>(TEXT("VehicleInventory"));
+}
+
+bool AForgeVehicle::IsAvailableForInteraction_Implementation(const UPrimitiveComponent* InteractedComponent, const AActor* InteractingActor) const
+{
+	return true;
+}
+
+void AForgeVehicle::OnPostInteract_Implementation(const AActor* InteractingActor, const UPrimitiveComponent* InteractedComponent)
+{
+	// Let gameplay customise the interaction first (e.g. open a menu instead of entering).
+	OnVehicleInteracted(const_cast<AActor*>(InteractingActor));
+
+	// Default behaviour: seat the interacting actor's player in the first available seat.
+	if (const APawn* InteractingPawn = Cast<APawn>(InteractingActor))
+	{
+		if (APlayerState* InteractingPlayerState = InteractingPawn->GetPlayerState())
+		{
+			RequestEnterAnySeat(InteractingPlayerState);
+		}
+	}
 }
 
 void AForgeVehicle::PostInitializeComponents()

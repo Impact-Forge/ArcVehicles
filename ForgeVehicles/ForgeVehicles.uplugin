@@ -66,6 +66,22 @@
 		{
 			"Name": "GameFeatures",
 			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
+			"Name": "GASCompanion",
+			"Enabled": true
+		},
+		{
+			"Name": "TwistedBytes_InteractionSystem",
+			"Enabled": true
+		},
+		{
+			"Name": "ArcInventory",
+			"Enabled": true
 		}
 	]
 }
