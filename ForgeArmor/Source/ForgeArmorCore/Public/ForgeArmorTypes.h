@@ -10,6 +10,8 @@
 
 #include "ForgeArmorTypes.generated.h"
 
+class AController;
+
 /**
  * Penetrator classification. Drives the DeMarre exponent, slope-effect table and
  * ricochet behaviour of the kinetic-energy solver, and selects the chemical-energy

@@ -8,6 +8,8 @@
 
 #include "ForgeVehicleDamageAdapter.generated.h"
 
+class APawn;
+
 UINTERFACE(BlueprintType, MinimalAPI)
 class UForgeVehicleDamageAdapter : public UInterface
 {

@@ -32,6 +32,12 @@
 			"Type": "Runtime",
 			"LoadingPhase": "Default",
 			"PlatformAllowList": [ "Win64", "Mac", "Linux" ]
+		},
+		{
+			"Name": "ForgeArmorBSP",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux" ]
 		}
 	],
 	"Plugins": [
@@ -40,7 +46,16 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
 			"Name": "ForgeVehicles",
+			"Enabled": true,
+			"Optional": true
+		},
+		{
+			"Name": "BattleSpacePlatforms",
 			"Enabled": true,
 			"Optional": true
 		}
