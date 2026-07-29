@@ -1,0 +1,63 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"EngineVersion": "5.8.0",
+	"FriendlyName": "Forge Armor",
+	"Description": "Impact-Forge realistic vehicle armor & damage framework. Data-driven armor plates (real mm RHA-equivalent values, slope effects, ricochets), per-module damage (engine, transmission, wheels/tracks, turret drive, gun, optics, fuel, ammo), crew casualties, spall, fire and ammo cook-off. Integrates with the Terminal Ballistics plugin through its public tag/event API only - no Terminal Ballistics source modifications, safe across TB updates.",
+	"Category": "Vehicles",
+	"CreatedBy": "Impact-Forge",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "ForgeArmorCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux" ]
+		},
+		{
+			"Name": "ForgeArmorTB",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux" ]
+		},
+		{
+			"Name": "ForgeArmorVehicles",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux" ]
+		},
+		{
+			"Name": "ForgeArmorBSP",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux" ]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "TerminalBallistics",
+			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
+			"Name": "ForgeVehicles",
+			"Enabled": true,
+			"Optional": true
+		},
+		{
+			"Name": "BattleSpacePlatforms",
+			"Enabled": true,
+			"Optional": true
+		}
+	]
+}

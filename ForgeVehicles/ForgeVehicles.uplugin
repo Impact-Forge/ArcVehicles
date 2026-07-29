@@ -1,0 +1,87 @@
+{
+	"FileVersion": 3,
+	"Version": 2,
+	"VersionName": "2.0.0",
+	"EngineVersion": "5.8.0",
+	"FriendlyName": "Forge Vehicles",
+	"Description": "Unified Impact-Forge vehicle framework. Consolidates the Arc Vehicles seat/ignition/exit foundation with the RTune ground physics, K2 rotary-wing and fixed-wing aircraft physics, and a new water-craft solution into a single modular plugin.",
+	"Category": "Vehicles",
+	"CreatedBy": "Impact-Forge (based on ArcVehicles by Puny Human & Garrett Fleenor, RTune/K2 by Kallisto)",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "ForgeVehiclesCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux", "IOS", "Android" ]
+		},
+		{
+			"Name": "AsyncTickPhysics",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux", "IOS", "Android" ]
+		},
+		{
+			"Name": "ForgeVehiclesGround",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux", "IOS", "Android" ]
+		},
+		{
+			"Name": "ForgeVehiclesRotaryWing",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux", "IOS", "Android" ]
+		},
+		{
+			"Name": "ForgeVehiclesFixedWing",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux", "IOS", "Android" ]
+		},
+		{
+			"Name": "ForgeVehiclesWaterCraft",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux", "IOS", "Android" ]
+		},
+		{
+			"Name": "ForgeVehiclesEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux" ]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ModularGameplay",
+			"Enabled": true
+		},
+		{
+			"Name": "GameFeatures",
+			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
+			"Name": "GASCompanion",
+			"Enabled": true
+		},
+		{
+			"Name": "TwistedBytes_InteractionSystem",
+			"Enabled": true
+		},
+		{
+			"Name": "ArcInventory",
+			"Enabled": true
+		}
+	]
+}
