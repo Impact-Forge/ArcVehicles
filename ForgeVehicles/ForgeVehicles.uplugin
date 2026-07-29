@@ -52,6 +52,12 @@
 			"PlatformAllowList": [ "Win64", "Mac", "Linux", "IOS", "Android" ]
 		},
 		{
+			"Name": "ForgeVehiclesDrones",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [ "Win64", "Mac", "Linux", "IOS", "Android" ]
+		},
+		{
 			"Name": "ForgeVehiclesEditor",
 			"Type": "Editor",
 			"LoadingPhase": "Default",
