@@ -61,6 +61,9 @@ public:
 	//~ Begin APawn interface
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	virtual void PawnClientRestart() override;
+	/* Tears the driver contexts down when possession is lost, including via a raw UnPossess that
+	 * never goes through the seat framework (drones, debug possession, AI hand-off). */
+	virtual void NotifyControllerChanged() override;
 	// End APawn interface
 
 	//~ Begin AForgeVehiclePawn interface
@@ -95,8 +98,22 @@ protected:
 	virtual void Input_Vertical(const FInputActionValue& Value);
 	virtual void Input_ToggleEngine(const FInputActionValue& Value);
 
-	/* Adds/removes the driver mapping context for a locally controlled occupant. */
-	void UpdateDriverInputMapping(bool bAdd);
+	/**
+	 * Adds/removes the driver input contexts (shared vehicle base layer + this vehicle's own layer)
+	 * for a locally controlled occupant.
+	 *
+	 * @param ForController  Controller whose local player owns the contexts. Defaults to the current
+	 *                       controller; pass the outgoing controller explicitly when tearing down
+	 *                       after possession has already moved away.
+	 */
+	void UpdateDriverInputMapping(bool bAdd, APlayerController* ForController = nullptr);
+
+	/**
+	 * Adds/removes the per-seat input context declared in FForgeSeatData for the occupant of a seat.
+	 * No-op for non-local occupants and for seats without a context. Runs on the owning client, which
+	 * the seat framework reaches through UForgeVehiclePlayerSeatComponent's OnRep.
+	 */
+	void UpdateSeatInputMapping(APlayerState* Player, UForgeVehicleSeatConfig* Seat, bool bAdd);
 
 public:
 
@@ -122,12 +139,25 @@ public:
 
 protected:
 
-	/* Enhanced-Input mapping context added for the driver while they occupy the driver seat. */
+	/**
+	 * Shared "any vehicle" input context (throttle, steer, exit, engine toggle), added underneath the
+	 * per-vehicle context below. Set this on a common vehicle base Blueprint so every vehicle inherits
+	 * the standard controls, and leave DriverMappingContext for what makes each vehicle different.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ForgeVehicle|Input")
+	TObjectPtr<UInputMappingContext> VehicleBaseMappingContext;
+
+	/* Priority of the shared layer. Kept below DriverMappingPriority so vehicles can override binds. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ForgeVehicle|Input")
+	int32 VehicleBaseMappingPriority = 0;
+
+	/* Per-vehicle Enhanced-Input context added for the driver while they occupy the driver seat.
+	 * Layered on top of VehicleBaseMappingContext; higher priority wins on conflicting binds. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ForgeVehicle|Input")
 	TObjectPtr<UInputMappingContext> DriverMappingContext;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ForgeVehicle|Input")
-	int32 DriverMappingPriority = 0;
+	int32 DriverMappingPriority = 1;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ForgeVehicle|Input")
 	TObjectPtr<UInputAction> ThrottleAction;
@@ -153,4 +183,10 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ForgeVehicle|Input|Vertical")
 	float VerticalInputCoefficient = 1.f;
+
+private:
+
+	/* Controller the driver contexts are currently applied to. NotifyControllerChanged fires after
+	 * possession has already moved, so the outgoing controller has to be remembered to clean up. */
+	TWeakObjectPtr<APlayerController> DriverInputController;
 };

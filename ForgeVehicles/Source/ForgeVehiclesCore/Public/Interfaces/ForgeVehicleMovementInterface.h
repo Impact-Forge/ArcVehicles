@@ -42,4 +42,21 @@ public:
 
 	/* Optional vertical demand, normalised to [-1, 1] (heli collective trim, VTOL, dive planes). */
 	virtual void SetVerticalInput(float Value) {}
+
+	/**
+	 * Optional roll demand, normalised to [-1, 1]. Aircraft and multirotors need a roll channel
+	 * independent of steering; ground and water craft leave this a no-op.
+	 *
+	 * Named "...AxisInput" rather than "SetRollInput" on purpose: the rotary-wing and fixed-wing
+	 * vehicles already declare non-virtual SetRollInput/SetYawInput members, which would silently
+	 * hide same-named interface virtuals instead of overriding them.
+	 */
+	virtual void SetRollAxisInput(float Value) {}
+
+	/**
+	 * Optional yaw demand, normalised to [-1, 1], for vehicles whose yaw is a separate channel from
+	 * steering (fixed-wing rudder, multirotor yaw). Defaults to routing through SetSteeringInput so
+	 * autopilots can drive any vehicle uniformly through this interface.
+	 */
+	virtual void SetYawAxisInput(float Value) { SetSteeringInput(Value); }
 };

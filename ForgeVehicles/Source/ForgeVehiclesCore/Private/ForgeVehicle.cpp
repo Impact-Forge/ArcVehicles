@@ -126,28 +126,114 @@ void AForgeVehicle::PawnClientRestart()
 	UpdateDriverInputMapping(true);
 }
 
-void AForgeVehicle::UpdateDriverInputMapping(bool bAdd)
+void AForgeVehicle::NotifyControllerChanged()
 {
-	if (!DriverMappingContext)
+	Super::NotifyControllerChanged();
+
+	// Possession has already moved by the time this fires. If the contexts are still applied to a
+	// controller that is no longer driving us, take them back. Without this, a raw UnPossess (one
+	// that never runs the seat-exit path) leaves the vehicle's input contexts stuck on the player.
+	APlayerController* PreviousPC = DriverInputController.Get();
+	if (PreviousPC && PreviousPC != GetController())
+	{
+		UpdateDriverInputMapping(false, PreviousPC);
+	}
+}
+
+void AForgeVehicle::UpdateDriverInputMapping(bool bAdd, APlayerController* ForController)
+{
+	if (!VehicleBaseMappingContext && !DriverMappingContext)
 	{
 		return;
 	}
 
-	if (const APlayerController* PC = Cast<APlayerController>(GetController()))
+	APlayerController* PC = ForController ? ForController : Cast<APlayerController>(GetController());
+	if (!PC)
 	{
-		if (const ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
+		return;
+	}
+
+	const ULocalPlayer* LocalPlayer = PC->GetLocalPlayer();
+	if (!LocalPlayer)
+	{
+		return;
+	}
+
+	UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
+	if (!Subsystem)
+	{
+		return;
+	}
+
+	// Layered: the shared vehicle context sits underneath so a vehicle can override individual binds
+	// without having to restate the common controls.
+	if (bAdd)
+	{
+		if (VehicleBaseMappingContext)
 		{
-			if (UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
-			{
-				if (bAdd)
-				{
-					Subsystem->AddMappingContext(DriverMappingContext, DriverMappingPriority);
-				}
-				else
-				{
-					Subsystem->RemoveMappingContext(DriverMappingContext);
-				}
-			}
+			Subsystem->AddMappingContext(VehicleBaseMappingContext, VehicleBaseMappingPriority);
+		}
+		if (DriverMappingContext)
+		{
+			Subsystem->AddMappingContext(DriverMappingContext, DriverMappingPriority);
+		}
+		DriverInputController = PC;
+	}
+	else
+	{
+		if (DriverMappingContext)
+		{
+			Subsystem->RemoveMappingContext(DriverMappingContext);
+		}
+		if (VehicleBaseMappingContext)
+		{
+			Subsystem->RemoveMappingContext(VehicleBaseMappingContext);
+		}
+		if (DriverInputController == PC)
+		{
+			DriverInputController.Reset();
+		}
+	}
+}
+
+void AForgeVehicle::UpdateSeatInputMapping(APlayerState* Player, UForgeVehicleSeatConfig* Seat, bool bAdd)
+{
+	FForgeSeatData SeatData;
+	if (!IsValid(Player) || !GetSeatData(Seat, SeatData) || SeatData.InputMappingContext.IsNull())
+	{
+		return;
+	}
+
+	// Input contexts are per-local-player, so only the machine that owns this occupant does anything.
+	const APlayerController* PC = Cast<APlayerController>(Player->GetOwner());
+	if (!PC || !PC->IsLocalController())
+	{
+		return;
+	}
+
+	const ULocalPlayer* LocalPlayer = PC->GetLocalPlayer();
+	if (!LocalPlayer)
+	{
+		return;
+	}
+
+	UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
+	if (!Subsystem)
+	{
+		return;
+	}
+
+	// Seat contexts are authored as soft refs; a synchronous load is acceptable here because seat
+	// changes are discrete, player-driven events rather than per-frame work.
+	if (UInputMappingContext* Context = SeatData.InputMappingContext.LoadSynchronous())
+	{
+		if (bAdd)
+		{
+			Subsystem->AddMappingContext(Context, SeatData.InputMappingPriority);
+		}
+		else
+		{
+			Subsystem->RemoveMappingContext(Context);
 		}
 	}
 }
@@ -249,9 +335,27 @@ void AForgeVehicle::NotifyPlayerSeatChangeEvent_Implementation(APlayerState* Pla
 {
 	Super::NotifyPlayerSeatChangeEvent_Implementation(Player, ToSeat, FromSeat, SeatChangeEvent);
 
-	// When the locally controlled occupant leaves the driver seat, drop the driver mapping context.
+	// When the locally controlled occupant leaves the driver seat, drop the driver mapping contexts.
 	if (SeatChangeEvent == EForgeVehicleSeatChangeType::ExitVehicle && FromSeat && FromSeat->IsDriverSeat())
 	{
 		UpdateDriverInputMapping(false);
+	}
+
+	// Per-seat contexts: swap the occupant's seat layer to match the seat they are now in. This is
+	// what lets a gunner or specialist station carry different controls to the driver's.
+	switch (SeatChangeEvent)
+	{
+	case EForgeVehicleSeatChangeType::EnterVehicle:
+		UpdateSeatInputMapping(Player, ToSeat, true);
+		break;
+	case EForgeVehicleSeatChangeType::SwitchSeats:
+		UpdateSeatInputMapping(Player, FromSeat, false);
+		UpdateSeatInputMapping(Player, ToSeat, true);
+		break;
+	case EForgeVehicleSeatChangeType::ExitVehicle:
+		UpdateSeatInputMapping(Player, FromSeat, false);
+		break;
+	default:
+		break;
 	}
 }

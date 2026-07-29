@@ -47,13 +47,24 @@ void AForgeVehiclePawn::BecomePossessedByPlayer(APlayerState* InPlayerState)
 
 		OtherController->Possess(this);
 
-		PreviousPawn->SetOwner(OtherController);
+		// Keep the outgoing pawn owned by the controller so it carries on replicating to that
+		// client while parked. Guarded: a controller mid-respawn (or a remote operator taking
+		// control of an unmanned vehicle) may have no pawn at all.
+		if (IsValid(PreviousPawn))
+		{
+			PreviousPawn->SetOwner(OtherController);
+		}
 	}
 }
 
 AForgeBaseVehicle* AForgeVehiclePawn::GetOwningVehicle()
 {
-	return GetSeatConfig()->GetVehicleOwner();
+	// Seatless vehicles (drones, AI-driven platforms) have no driver seat config to resolve through.
+	if (const UForgeVehicleSeatConfig* Config = GetSeatConfig())
+	{
+		return Config->GetVehicleOwner();
+	}
+	return nullptr;
 }
 
 void AForgeVehiclePawn::NotifyPlayerSeatChangeEvent_Implementation(APlayerState* Player, UForgeVehicleSeatConfig* ToSeat, UForgeVehicleSeatConfig* FromSeat, EForgeVehicleSeatChangeType SeatChangeEvent)
