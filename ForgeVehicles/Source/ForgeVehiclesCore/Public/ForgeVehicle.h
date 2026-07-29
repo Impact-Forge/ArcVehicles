@@ -2,20 +2,25 @@
 
 #pragma once
 
+#include "AbilitySystemInterface.h"
+#include "Components/ForgeEngineIgnitionComponent.h"
+#include "Components/ForgeVehicleLightComponent.h"
 #include "CoreMinimal.h"
 #include "ForgeBaseVehicle.h"
-#include "Components/ForgeEngineIgnitionComponent.h"
-#include "Interfaces/ForgeVehicleMovementInterface.h"
 #include "ForgeVehicleTypes.h"
 #include "Interface/TBIA_Interactable.h"
+#include "Interfaces/ForgeVehicleMovementInterface.h"
 #include "ForgeVehicle.generated.h"
 
-class USkeletalMeshComponent;
+class UAbilitySystemComponent;
+class UArcInventoryComponent;
+class UForgeVehicleAttributeSet;
 class UForgeVehicleExitPoint;
 class UForgeVehicleRunOverComponent;
-class UArcInventoryComponent;
+class UGameplayAbility;
 class UInputAction;
 class UInputMappingContext;
+class USkeletalMeshComponent;
 struct FInputActionValue;
 
 /**
@@ -31,13 +36,36 @@ struct FInputActionValue;
  * fixed-wing / water-craft modules only have to supply their propulsion and point the base at it.
  */
 UCLASS(Abstract)
-class FORGEVEHICLESCORE_API AForgeVehicle : public AForgeBaseVehicle, public ITBIA_Interactable
+class FORGEVEHICLESCORE_API AForgeVehicle : public AForgeBaseVehicle, public ITBIA_Interactable, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
 public:
 
 	AForgeVehicle(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	//~ Begin IAbilitySystemInterface
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+	// End IAbilitySystemInterface
+
+	/* Vehicle condition / fuel / stowed ammunition attributes. */
+	UForgeVehicleAttributeSet* GetVehicleAttributes() const { return VehicleAttributes; }
+
+	//~ Vehicle lights
+	/* Sets every light fixture of the given type. Server authoritative; state replicates. */
+	UFUNCTION(BlueprintCallable, Category = "ForgeVehicle|Lights")
+	void SetLightsOfType(EForgeVehicleLightType LightType, bool bOn);
+
+	/* Flips every fixture of the given type, using the first fixture's state as the reference. */
+	UFUNCTION(BlueprintCallable, Category = "ForgeVehicle|Lights")
+	void ToggleLightsOfType(EForgeVehicleLightType LightType);
+
+	/* True when any fixture of the given type is lit. */
+	UFUNCTION(BlueprintPure, Category = "ForgeVehicle|Lights")
+	bool AreLightsOfTypeOn(EForgeVehicleLightType LightType) const;
+
+	UFUNCTION(BlueprintPure, Category = "ForgeVehicle|Lights")
+	void GetLightsOfType(EForgeVehicleLightType LightType, TArray<UForgeVehicleLightComponent*>& OutLights) const;
 
 	//~ Begin ITBIA_Interactable (Twisted Bytes Interaction System)
 	/* Vehicles are interactable by default; override/extend for locked or destroyed states. */
@@ -56,7 +84,13 @@ public:
 
 	//~ Begin AActor interface
 	virtual void PostInitializeComponents() override;
+	virtual void BeginPlay() override;
 	// End AActor interface
+
+	//~ Begin APawn interface (ability actor info follows possession)
+	virtual void PossessedBy(AController* NewController) override;
+	virtual void OnRep_Controller() override;
+	// End APawn interface
 
 	//~ Begin APawn interface
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
@@ -137,7 +171,26 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UArcInventoryComponent* VehicleInventory;
 
+	/**
+	 * The vehicle's own ability system. Vehicles own their ASC rather than borrowing an occupant's,
+	 * so vehicle state (condition, fuel, lights, damage effects) survives crew changing and works
+	 * on unmanned platforms with no occupant at all.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
+
 protected:
+
+	/* Attribute set granted to the vehicle's own ability system. */
+	UPROPERTY()
+	TObjectPtr<UForgeVehicleAttributeSet> VehicleAttributes;
+
+	/* Abilities granted to the vehicle itself on BeginPlay (lights, horn, self-repair, ...). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ForgeVehicle|Abilities")
+	TArray<TSubclassOf<UGameplayAbility>> DefaultAbilities;
+
+	/* Points the ability actor info at this vehicle; safe to call repeatedly. */
+	void InitializeAbilitySystem();
 
 	/**
 	 * Shared "any vehicle" input context (throttle, steer, exit, engine toggle), added underneath the

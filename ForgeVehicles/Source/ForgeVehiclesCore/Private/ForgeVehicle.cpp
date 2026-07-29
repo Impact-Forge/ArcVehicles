@@ -5,8 +5,13 @@
 #include "ForgeVehicleExitPoint.h"
 #include "Interfaces/ForgeVehicleMovementInterface.h"
 #include "Seats/ForgeSeatConfig.h"
+#include "Components/ForgeVehicleLightComponent.h"
 #include "Components/ForgeVehicleRunOverComponent.h"
+#include "GAS/ForgeVehicleAttributeSet.h"
 #include "ArcInventoryComponent.h"
+
+#include "AbilitySystemComponent.h"
+#include "Abilities/GameplayAbility.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Pawn.h"
@@ -53,6 +58,129 @@ AForgeVehicle::AForgeVehicle(const FObjectInitializer& ObjectInitializer)
 	RunOverComponent = CreateDefaultSubobject<UForgeVehicleRunOverComponent>(TEXT("RunOverComponent"));
 
 	VehicleInventory = CreateDefaultSubobject<UArcInventoryComponent>(TEXT("VehicleInventory"));
+
+	// The vehicle owns its ability system rather than borrowing an occupant's, so vehicle state
+	// outlives crew changes and works on unmanned platforms. Mixed replication: the possessing
+	// client gets full fidelity, everyone else only what they need to predict/observe.
+	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->SetIsReplicated(true);
+		AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
+	}
+
+	VehicleAttributes = CreateDefaultSubobject<UForgeVehicleAttributeSet>(TEXT("VehicleAttributes"));
+}
+
+UAbilitySystemComponent* AForgeVehicle::GetAbilitySystemComponent() const
+{
+	return AbilitySystemComponent;
+}
+
+void AForgeVehicle::InitializeAbilitySystem()
+{
+	if (!AbilitySystemComponent)
+	{
+		return;
+	}
+
+	// Owner and avatar are both the vehicle: it is its own gameplay actor.
+	AbilitySystemComponent->InitAbilityActorInfo(this, this);
+
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	for (const TSubclassOf<UGameplayAbility>& Ability : DefaultAbilities)
+	{
+		if (!IsValid(Ability))
+		{
+			continue;
+		}
+		// Granted with the vehicle as SourceObject so UForgeVehicleAbility::GetOwningVehicle resolves
+		// even when the ability instance is activated through an occupant's ability system.
+		FGameplayAbilitySpec Spec(Ability, 1, INDEX_NONE, this);
+		Spec.SourceObject = this;
+		AbilitySystemComponent->GiveAbility(Spec);
+	}
+}
+
+void AForgeVehicle::BeginPlay()
+{
+	Super::BeginPlay();
+	InitializeAbilitySystem();
+}
+
+void AForgeVehicle::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+	// Re-point actor info so the new controller becomes the ability system's owning connection.
+	InitializeAbilitySystem();
+}
+
+void AForgeVehicle::OnRep_Controller()
+{
+	Super::OnRep_Controller();
+	InitializeAbilitySystem();
+}
+
+void AForgeVehicle::GetLightsOfType(const EForgeVehicleLightType LightType, TArray<UForgeVehicleLightComponent*>& OutLights) const
+{
+	OutLights.Reset();
+
+	TInlineComponentArray<UForgeVehicleLightComponent*> Lights(this);
+	for (UForgeVehicleLightComponent* Light : Lights)
+	{
+		if (IsValid(Light) && Light->LightType == LightType)
+		{
+			OutLights.Add(Light);
+		}
+	}
+}
+
+void AForgeVehicle::SetLightsOfType(const EForgeVehicleLightType LightType, const bool bOn)
+{
+	TArray<UForgeVehicleLightComponent*> Lights;
+	GetLightsOfType(LightType, Lights);
+
+	for (UForgeVehicleLightComponent* Light : Lights)
+	{
+		Light->SetLightOn(bOn);
+	}
+}
+
+void AForgeVehicle::ToggleLightsOfType(const EForgeVehicleLightType LightType)
+{
+	TArray<UForgeVehicleLightComponent*> Lights;
+	GetLightsOfType(LightType, Lights);
+
+	if (Lights.Num() == 0)
+	{
+		return;
+	}
+
+	// Drive the whole group from the first fixture's state so a group can never end up split.
+	const bool bNewState = !Lights[0]->IsLightOn();
+	for (UForgeVehicleLightComponent* Light : Lights)
+	{
+		Light->SetLightOn(bNewState);
+	}
+}
+
+bool AForgeVehicle::AreLightsOfTypeOn(const EForgeVehicleLightType LightType) const
+{
+	TArray<UForgeVehicleLightComponent*> Lights;
+	GetLightsOfType(LightType, Lights);
+
+	for (const UForgeVehicleLightComponent* Light : Lights)
+	{
+		if (Light->IsLightOn())
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 bool AForgeVehicle::IsAvailableForInteraction_Implementation(const UPrimitiveComponent* InteractedComponent, const AActor* InteractingActor) const
