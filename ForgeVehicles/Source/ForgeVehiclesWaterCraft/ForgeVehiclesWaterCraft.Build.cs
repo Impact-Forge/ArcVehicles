@@ -16,6 +16,7 @@ public class ForgeVehiclesWaterCraft : ModuleRules
 				"Engine",
 				"PhysicsCore",
 				"ForgeVehiclesCore",
+				"TBIA_Runtime"
 			}
 			);
 

@@ -16,6 +16,7 @@ public class ForgeVehiclesFixedWing : ModuleRules
 				"Engine",
 				"PhysicsCore",
 				"ForgeVehiclesCore",
+				"TBIA_Runtime"
 			}
 			);
 

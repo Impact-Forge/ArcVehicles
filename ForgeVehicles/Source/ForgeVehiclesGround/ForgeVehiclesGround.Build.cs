@@ -17,6 +17,7 @@ public class ForgeVehiclesGround : ModuleRules
 				"PhysicsCore",
 				"ForgeVehiclesCore",
 				"AsyncTickPhysics",
+				"TBIA_Runtime"
 			}
 			);
 

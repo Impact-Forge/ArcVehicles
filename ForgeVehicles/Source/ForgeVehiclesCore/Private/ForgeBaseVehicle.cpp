@@ -16,6 +16,7 @@
 #include "Net/RepLayout.h"
 
 #include "ForgeVehicleExitPoint.h"
+#include "Engine/GameInstance.h"
 
 #if FORGEVEHICLES_MODULAR
 #include "Components/GameFrameworkComponentManager.h"
@@ -44,7 +45,7 @@ void AForgeBaseVehicle::PostInitializeComponents()
 
 	//HACKHACK: Due to oddities in how Unreal Engine replicates instanced subobjects
 	//we duplicate them here.  The replicated array then syncs the objects safely to the client
-	//if (!IsNetMode(NM_Standalone))
+	if (!IsNetMode(NM_Standalone))
 	{
 		ReplicatedSeatConfigs.Empty(1 + AdditionalSeatConfigs.Num());
 
@@ -391,7 +392,7 @@ void AForgeBaseVehicle::ProcessSeatChangeQueue()
 
 	while (SeatChangeQueue.Num() > 0)
 	{
-		FForgeVehicleSeatChangeEvent SeatChangeEvent = SeatChangeQueue.Pop(false);
+		FForgeVehicleSeatChangeEvent SeatChangeEvent = SeatChangeQueue.Pop(EAllowShrinking::No);
 		
 		//If we don't have a player, then we have a problem.
 		//We can safely just ignore in shipping, but we should let the developer
@@ -527,9 +528,8 @@ void AForgeBaseVehicle::ProcessSeatChangeQueue()
 					ComponentManager->AddReceiver(SeatChangeEvent.Player);
 				}
 				PlayerSeatComponent = PlayerPawn->FindComponentByClass<UForgeVehiclePlayerSeatComponent>();
-				
+#endif				
 				if (!IsValid(PlayerSeatComponent))
-#endif
 				{
 					const UForgeVehicleDeveloperSettings* Settings = GetDefault<UForgeVehicleDeveloperSettings>();
 					TSubclassOf<UForgeVehiclePlayerSeatComponent> PlayerCompClass = Settings->PlayerSeatComponentClass;

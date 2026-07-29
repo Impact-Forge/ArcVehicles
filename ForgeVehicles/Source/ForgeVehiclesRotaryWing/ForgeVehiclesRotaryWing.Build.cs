@@ -16,6 +16,7 @@ public class ForgeVehiclesRotaryWing : ModuleRules
 				"Engine",
 				"PhysicsCore",
 				"ForgeVehiclesCore",
+				"TBIA_Runtime"
 			}
 			);
 
