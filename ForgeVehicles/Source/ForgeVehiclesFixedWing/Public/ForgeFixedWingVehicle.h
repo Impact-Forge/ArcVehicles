@@ -252,6 +252,13 @@ private:
 
 protected:
 
+	/**
+	 * The physics body, for subclasses that need to configure it before BeginPlay reads its mass.
+	 * Small airframes in particular must set an explicit mass override: a light UAV's auto-computed
+	 * mass from collision volume is never the intended value.
+	 */
+	UStaticMeshComponent* GetCore() const { return Core; }
+
 	// ---- Control authority ------------------------------------------------------------------------
 
 	// Pitch control power (deg/sec^2 of angular acceleration at full input and full authority).
