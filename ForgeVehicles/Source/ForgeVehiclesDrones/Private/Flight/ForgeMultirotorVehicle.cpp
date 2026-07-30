@@ -9,6 +9,7 @@
 #include "InputActionValue.h"
 #include "Net/UnrealNetwork.h"
 #include "RotorComponent.h"
+#include "Systems/ForgeWindSubsystem.h"
 
 namespace
 {
@@ -503,19 +504,29 @@ void AForgeMultirotorVehicle::ApplyMotorForces()
 void AForgeMultirotorVehicle::ApplyAerodynamicDrag(const float DeltaTime)
 {
 	const FVector VelocityCmS = Core->GetPhysicsLinearVelocity();
-	const FVector VelocityMS = VelocityCmS / 100.f;
 
+	// Drag and wind are the same force: both act on the air's velocity relative to the airframe.
+	// Handling them together is why a hovering drone drifts downwind while apparently holding still,
+	// and why it has to lean into a breeze to stay put.
+	if (const UForgeWindSubsystem* Wind = UForgeWindSubsystem::Get(this))
+	{
+		const FVector Force = Wind->ComputeWindForce(GetActorLocation(), VelocityCmS, BodyDragCoefficient, FrontalAreaM2, AirDensity);
+		if (!Force.IsNearlyZero())
+		{
+			Core->AddForce(Force);
+		}
+		return;
+	}
+
+	// No wind subsystem (bare plugin use): fall back to plain drag opposing motion.
+	const FVector VelocityMS = VelocityCmS / 100.f;
 	if (VelocityMS.IsNearlyZero())
 	{
 		return;
 	}
-
-	// F = 0.5 * rho * Cd * A * v^2, opposing motion.
 	const float Speed = VelocityMS.Size();
 	const float DragMagnitudeN = 0.5f * AirDensity * BodyDragCoefficient * FrontalAreaM2 * Speed * Speed;
-	const FVector DragForce = -VelocityMS.GetSafeNormal() * DragMagnitudeN * NewtonsToUnreal;
-
-	Core->AddForce(DragForce);
+	Core->AddForce(-VelocityMS.GetSafeNormal() * DragMagnitudeN * NewtonsToUnreal);
 }
 
 void AForgeMultirotorVehicle::UpdateRotorVisuals()
