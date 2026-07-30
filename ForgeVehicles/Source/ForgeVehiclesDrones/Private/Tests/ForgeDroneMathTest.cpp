@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "Math/ForgeDroneMath.h"
+#include "Operator/ForgeDroneInputFrame.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -262,6 +263,70 @@ bool FForgeDroneLinkTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Smoothing moves toward the target"), Smoothed > 0.f && Smoothed < 1.f);
 	TestEqual(TEXT("A large step snaps to the target"), Link::SmoothTowards(0.f, 1.f, 100.f, 1.f), 1.f);
 	TestEqual(TEXT("Zero smoothing is instant"), Link::SmoothTowards(0.f, 1.f, 0.f, 0.1f), 1.f);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FForgeDroneInputFrameTest, "Forge.Drones.Relay.Frame",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FForgeDroneInputFrameTest::RunTest(const FString& Parameters)
+{
+	using FFrame = FForgeDroneInputFrame;
+
+	// ---- Quantisation: the extremes and the centre must survive exactly, since those are the positions
+	// a pilot actually holds - full deflection and hands off.
+	TestEqual(TEXT("Centre survives the round trip exactly"), FFrame::Dequantise(FFrame::Quantise(0.f)), 0.f);
+	TestEqual(TEXT("Full deflection survives exactly"), FFrame::Dequantise(FFrame::Quantise(1.f)), 1.f);
+	TestEqual(TEXT("Full reverse deflection survives exactly"), FFrame::Dequantise(FFrame::Quantise(-1.f)), -1.f);
+
+	// A byte per axis is worth about 0.8% of full travel, which is finer than any stick reports.
+	for (float Value = -1.f; Value <= 1.f; Value += 0.05f)
+	{
+		const float RoundTripped = FFrame::Dequantise(FFrame::Quantise(Value));
+		TestTrue(TEXT("Quantisation error stays under one part in a hundred"),
+			FMath::Abs(RoundTripped - Value) < 0.01f);
+	}
+
+	// ---- Out-of-range input is clamped rather than wrapping into the opposite deflection, which is the
+	// failure that would turn a hard right into a hard left.
+	TestEqual(TEXT("Over-range input clamps to full"), FFrame::Dequantise(FFrame::Quantise(5.f)), 1.f);
+	TestEqual(TEXT("Under-range input clamps to full reverse"), FFrame::Dequantise(FFrame::Quantise(-5.f)), -1.f);
+
+	// ---- Sequence ordering, including the wrap at 256. This is the whole reason the counter exists:
+	// unreliable frames arrive out of order, and getting the comparison wrong drags the aircraft back
+	// through inputs the pilot has already left behind.
+	{
+		FFrame Frame;
+
+		Frame.Sequence = 5;
+		TestTrue(TEXT("A later frame is newer"), Frame.IsNewerThan(4));
+		TestFalse(TEXT("An earlier frame is not newer"), Frame.IsNewerThan(6));
+		TestFalse(TEXT("A repeated frame is not newer"), Frame.IsNewerThan(5));
+
+		// Across the wrap: 2 arrives after 250 and must count as newer.
+		Frame.Sequence = 2;
+		TestTrue(TEXT("A frame just past the wrap is newer than one just before it"), Frame.IsNewerThan(250));
+
+		// And the reverse must not be true, or a wrap would let a stale frame through.
+		Frame.Sequence = 250;
+		TestFalse(TEXT("A frame just before the wrap is not newer than one just past it"), Frame.IsNewerThan(2));
+
+		// Half the range apart is the ambiguous case; anything beyond it is treated as older, which is
+		// correct because a gap that large means far more loss than a control stream can survive anyway.
+		Frame.Sequence = 100;
+		TestTrue(TEXT("A frame 60 ahead is newer"), Frame.IsNewerThan(40));
+		TestFalse(TEXT("A frame 60 behind is not newer"), Frame.IsNewerThan(160));
+	}
+
+	// ---- A default frame is centred sticks, which is what a released or timed-out drone gets handed.
+	{
+		const FFrame Default;
+		TestEqual(TEXT("A default frame has no longitudinal input"), FFrame::Dequantise(Default.Longitudinal), 0.f);
+		TestEqual(TEXT("A default frame has no lateral input"), FFrame::Dequantise(Default.Lateral), 0.f);
+		TestEqual(TEXT("A default frame has no yaw input"), FFrame::Dequantise(Default.Yaw), 0.f);
+		TestEqual(TEXT("A default frame has no vertical input"), FFrame::Dequantise(Default.Vertical), 0.f);
+	}
 
 	return true;
 }

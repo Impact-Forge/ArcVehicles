@@ -37,7 +37,8 @@ SI, so a 2 kg airframe is a retune, not a reimplementation.
 | `UForgeDroneGimbalComponent` | Two-axis world-stabilised camera mount. |
 | `UForgeDroneDropReleaseComponent` | Store release that inherits the aircraft's velocity and credits the operator. |
 | `UForgeDroneWarheadComponent` | Arm-delay + minimum-distance safety, contact and proximity fuzes, `OnDetonated`. |
-| `UForgeDroneOperatorComponent` | Hands a player control of the drone and puts them back in their own body afterwards. |
+| `UForgeDroneOperatorComponent` | Hands a player control of the drone — by possession or by input relay — and puts them back where they were afterwards. |
+| `FForgeDroneInputFrame` | One packed, quantised, sequence-numbered frame of relayed stick input. |
 | `ForgeDroneMath` | The pure maths: mixer, battery curves, link factors. Unit-tested, no engine state. |
 
 ## Archetype tuning
@@ -136,33 +137,71 @@ or dive survives the signal flickering.
 
 ## Flying one: the operator, and their body
 
-`UForgeDroneOperatorComponent` is present on every archetype. `TakeControl(Controller)` possesses the
-drone; `ReleaseControl()` gives the player their body back.
+`UForgeDroneOperatorComponent` is present on every archetype, and there are two ways in:
 
-**It is not the seat system, deliberately.** A seat attaches its occupant to the vehicle, hides them
+| | `TakeControl` (possession) | `BeginRelayControl` (relay) |
+| --- | --- | --- |
+| The operator's pawn | Left standing, **unpossessed** | Stays theirs, **still possessed** |
+| The drone | Possessed by their controller | Never possessed; owned by their connection |
+| Camera | Follows possession | `SetViewTargetWithBlend` onto the drone |
+| Input | The ordinary pawn input path | Packed frames pushed via `SetRelayFlightInput` |
+| Cost | Runs the engine's possess/unpossess path on the body | Sidesteps it entirely |
+
+Possession is the simpler route and the camera and input come along for free. The relay exists because
+unpossessing a soldier is not free: it tears down their input component, and a project that binds
+anything in a one-shot initialiser will not rebind it on the way back. The relay never touches that
+path, so the body stays fully under its owner's control the whole time — which also means the soldier
+can be made to visibly stand there working a controller.
+
+**Neither is the seat system, deliberately.** A seat attaches its occupant to the vehicle, hides them
 and disables their movement. That is right for a driver and wrong for a drone operator: the soldier
-stays standing exactly where they were, in the open, visible and shootable, holding a controller.
-Nothing here moves, hides or protects them, because that exposure is the price of using a drone. The
-parked body is kept owned by its own controller so it carries on replicating to that client — the
-operator can watch themselves being shot at.
+stays standing exactly where they were, in the open, visible and shootable. Nothing here moves, hides
+or protects them, because that exposure is the price of using a drone. Under possession the parked body
+is kept owned by its own controller so it carries on replicating to that client — the operator can
+watch themselves being shot at.
 
 The body is also where the radio is: it is what gets passed to the link as the antenna, so range,
 terrain occlusion and jamming are all measured from the soldier rather than from the drone. Flying
 deep behind a ridge is therefore a decision, not a free move.
 
+### The relay wire format
+
+`SetRelayFlightInput(longitudinal, lateral, yaw, vertical)` and `SetRelayGimbalInput(pitch, yaw)`
+accumulate into one `FForgeDroneInputFrame`, flushed to the server at `RelaySendHz` (30 by default).
+Call them as often as you like — the send rate is what determines what a drone costs on the wire, not
+how often the project pushes input.
+
+* **One unreliable frame, not four reliable RPCs.** Reliability is worthless for a value that will be
+  superseded a thirtieth of a second later; a lost packet should cost one frame of staleness, not a
+  stalled channel. Axes are quantised to a byte each, which is more precision than a thumbstick has.
+* **Frames carry a wrapping sequence number,** because unreliable delivery reorders. Applying an older
+  frame after a newer one drags the aircraft back through inputs the pilot has already left behind,
+  which reads as a stutter in the controls.
+* **Discrete commands go separately and reliably.** `SendRelayCommand(EForgeDroneRelayCommand)` covers
+  arming, flight-mode toggle, store release, warhead arming and the autopilot modes. A lost "release
+  store" is not corrected by the next frame, so it does not belong in an unreliable one.
+* **A stalled stream centres the sticks** after `RelayInputTimeoutSeconds`, handing the aircraft to its
+  failsafe rather than leaving it flying its last input forever.
+* **An active autopilot wins.** Relayed sticks are not applied while the autopilot is flying, so a
+  pilot does not find themselves fighting a return-to-home they never cancelled.
+
+Everything still goes through `Link->FilterInput`, so a marginal signal is felt as sticky, delayed
+controls on both routes.
+
 Three things can go wrong, and each has a defined outcome:
 
 | | What happens |
 | --- | --- |
-| **The drone is destroyed** while being flown | The controller is handed back to its body in `EndPlay`, before the pawn goes away. Losing a drone must not leave a player staring at nothing. |
-| **The operator's body is destroyed** mid-flight | The antenna died with them, so the link goes dead and the aircraft runs its failsafe. By default the operator also loses the drone and is left pawnless — the same state any other death produces, for the project's death handling to pick up. Set `bReleaseControlOnOperatorBodyLost = false` to let them keep flying a radio-less aircraft. |
+| **The drone is destroyed** while being flown | The operator is released in `EndPlay`, before the pawn goes away — possession hands the controller back to its body, a relay restores its view target. Losing a drone must not leave a player staring at nothing. |
+| **The operator's body is destroyed** mid-flight | The antenna died with them, so the link goes dead and the aircraft runs its failsafe. By default the operator also loses the drone; under possession that leaves them pawnless, which is the same state any other death produces, for the project's death handling to pick up. Set `bReleaseControlOnOperatorBodyLost = false` to let them keep flying a radio-less aircraft. |
 | **Someone else tries to take a drone already being flown** | Refused with `AlreadyControlled`. A stale entry left by a disconnect does not lock the airframe out — only a live controller counts. |
 
-`TakeControl` is server-side and deliberately *not* a client RPC: until control is taken the drone is
-not owned by the operator's connection, so a request from that client would be dropped. Call it from
-something the player does own — a granted ability, an interaction on a deployed drone, or the item
-that carries it. Release is the opposite case and needs no glue: possession makes the drone
-connection-owned, so `ServerRequestRelease()` is callable straight from the client.
+`TakeControl` and `BeginRelayControl` are both server-side and deliberately *not* client RPCs: until
+control is taken the drone is not owned by the operator's connection, so a request from that client
+would be dropped. Call them from something the player does own — a granted ability, an interaction on a
+deployed drone, or the item that carries it. Release is the opposite case and needs no glue: both
+routes make the drone connection-owned, so `ServerRequestRelease()` is callable straight from the
+client, as are the relay's own input and command calls.
 
 An airframe nobody has ever taken does not run its failsafe, even though it has no link. Without that
 latch a recon quad sitting on the ground unclaimed would try to fly itself home.
@@ -182,8 +221,9 @@ latch a recon quad sitting on the ground unclaimed would try to fly itself home.
 4. For fixed-wing archetypes, add and tune the engine component as above.
 5. Call `Launch()` on the wings — they have no undercarriage and no runway. Give the quads `Battery`
    charge and let them lift off.
-6. Give the player a way to reach `Operator->TakeControl(...)` on the server — an ability, an
-   interaction, or a deployment item.
+6. Give the player a way to reach `Operator->TakeControl(...)` or `BeginRelayControl(...)` on the
+   server — an ability, an interaction, or a deployment item. For the relay route, also bind a drone
+   input context on the operator's own pawn and push the axes into `SetRelayFlightInput`.
 7. Wire the warhead's `OnDetonated` to whatever resolves damage in your project. The module
    deliberately carries no damage logic and no dependency on ForgeArmor; in BattleSpace that binding
    lives in `ForgeArmorVehicles`.
@@ -205,6 +245,7 @@ Jammers register themselves with `UForgeDroneJammerSubsystem` on activation. Giv
 Forge.Drones.Math.Mixer     hover symmetry, saturation shift, yaw signs, motor-out
 Forge.Drones.Math.Battery   the four archetype endurance figures, both power curves, integration
 Forge.Drones.Math.Link      range roll-off, jamming, line of sight, combination bounds
+Forge.Drones.Relay.Frame    axis quantisation, clamping, sequence ordering across the wrap
 ```
 
 Run them from the editor's Session Frontend, or headless:
