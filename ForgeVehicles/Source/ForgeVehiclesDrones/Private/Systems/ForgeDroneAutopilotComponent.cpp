@@ -70,6 +70,17 @@ void UForgeDroneAutopilotComponent::SetMode(const EForgeDroneAutopilotMode NewMo
 {
 	bEngagedByFailsafe = false;
 
+	// A wing cannot hold a point: it has to keep flying to stay up. For anything that is not a
+	// multirotor, holding station means circling the spot, so translate the request rather than
+	// commanding an attitude the aeroplane physically cannot sustain. This covers both the link-loss
+	// failsafe and the hold that ReturnToHome settles into on arrival.
+	if (NewMode == EForgeDroneAutopilotMode::PositionHold && !bMultirotorProfile && GetOwner())
+	{
+		SetOrbit(GetOwner()->GetActorLocation(), OrbitRadiusM, CruiseSpeedMS, bOrbitClockwise);
+		SetMode(EForgeDroneAutopilotMode::Orbit);
+		return;
+	}
+
 	if (Mode == NewMode)
 	{
 		return;

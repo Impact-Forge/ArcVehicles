@@ -3,6 +3,7 @@
 #include "Systems/ForgeDroneBatteryComponent.h"
 
 #include "Flight/ForgeMultirotorVehicle.h"
+#include "ForgeFixedWingVehicle.h"
 #include "GameFramework/Actor.h"
 #include "Math/ForgeDroneMath.h"
 #include "Net/UnrealNetwork.h"
@@ -43,8 +44,7 @@ void UForgeDroneBatteryComponent::TickComponent(float DeltaTime, ELevelTick Tick
 		return;
 	}
 
-	const float PropulsionDemand = GatherPropulsionDemand();
-	CurrentLoadW = AvionicsLoadW + PayloadLoadW + ForgeDrone::Battery::PropulsionLoadW(PropulsionDemand, MaxPropulsionLoadW);
+	CurrentLoadW = AvionicsLoadW + PayloadLoadW + GatherPropulsionLoadW();
 
 	const float PreviousCharge = ChargeFraction;
 	const float RemainingWh = ForgeDrone::Battery::IntegrateChargeWh(GetRemainingWh(), CurrentLoadW, DeltaTime);
@@ -74,15 +74,28 @@ void UForgeDroneBatteryComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	}
 }
 
-float UForgeDroneBatteryComponent::GatherPropulsionDemand() const
+float UForgeDroneBatteryComponent::GatherPropulsionLoadW() const
 {
 	if (const AForgeMultirotorVehicle* Multirotor = Cast<AForgeMultirotorVehicle>(GetOwner()))
 	{
-		return Multirotor->GetMeanMotorOutput();
+		// A rotor holding the aircraft up: shaft power climbs faster than thrust, which is why a quad
+		// flown hard empties its pack in a fraction of its hover endurance.
+		return ForgeDrone::Battery::PropulsionLoadW(Multirotor->GetMeanMotorOutput(), MaxPropulsionLoadW);
 	}
 
-	// Fixed-wing and other airframes report demand by pushing SetPayloadLoadW/driving this component
-	// externally; without a known airframe assume idle rather than inventing a load.
+	if (AForgeFixedWingVehicle* FixedWing = Cast<AForgeFixedWingVehicle>(GetOwner()))
+	{
+		// A wing carries its own weight, so the propeller only fights drag and the cruise curve applies.
+		// A shut-down engine draws nothing - and the aircraft keeps flying, because it glides.
+		if (!FixedWing->IsEngineRunning())
+		{
+			return 0.f;
+		}
+		return ForgeDrone::Battery::CruisePropulsionLoadW(FixedWing->GetThrottlePercent() * 0.01f, MaxPropulsionLoadW);
+	}
+
+	// Unknown airframes report their draw by driving SetPayloadLoadW externally; assume idle rather
+	// than inventing a load.
 	return 0.f;
 }
 
@@ -91,6 +104,17 @@ void UForgeDroneBatteryComponent::ApplyPowerScaleToOwner(const float PowerScale)
 	if (AForgeMultirotorVehicle* Multirotor = Cast<AForgeMultirotorVehicle>(GetOwner()))
 	{
 		Multirotor->SetPowerScale(PowerScale);
+		return;
+	}
+
+	if (AForgeFixedWingVehicle* FixedWing = Cast<AForgeFixedWingVehicle>(GetOwner()))
+	{
+		// There is no partial-power notion on the aero engine, so a flat pack simply shuts it down.
+		// The wing keeps flying: it becomes a glider, which is what actually happens.
+		if (PowerScale <= 0.f)
+		{
+			FixedWing->StopEngine();
+		}
 	}
 }
 

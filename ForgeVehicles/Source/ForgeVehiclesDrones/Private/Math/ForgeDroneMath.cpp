@@ -117,6 +117,12 @@ namespace ForgeDrone::Battery
 		return FMath::Max(MaxPropulsionW, 0.f) * FMath::Pow(Output, 1.5f);
 	}
 
+	float CruisePropulsionLoadW(const float Throttle, const float MaxPropulsionW)
+	{
+		const float Demand = FMath::Clamp(Throttle, 0.f, 1.f);
+		return FMath::Max(MaxPropulsionW, 0.f) * Demand;
+	}
+
 	float IntegrateChargeWh(const float CurrentWh, const float LoadW, const float DeltaSeconds)
 	{
 		const float DrawnWh = FMath::Max(LoadW, 0.f) * (FMath::Max(DeltaSeconds, 0.f) / 3600.f);

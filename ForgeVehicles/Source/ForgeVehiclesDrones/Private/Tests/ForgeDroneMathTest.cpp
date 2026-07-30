@@ -132,15 +132,42 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FForgeDroneBatteryTest, "Forge.Drones.Math.Batt
 
 bool FForgeDroneBatteryTest::RunTest(const FString& Parameters)
 {
-	// ---- Endurance figures backing the shipped archetype tuning.
-	TestTrue(TEXT("FPV quad: 28Wh at 280W is ~6 min"),
-		FMath::IsNearlyEqual(Battery::EnduranceMinutes(28.f, 280.f), 6.f, 0.05f));
-	TestTrue(TEXT("Recon quad: 60Wh at 128.6W is ~28 min"),
-		FMath::IsNearlyEqual(Battery::EnduranceMinutes(60.f, 128.6f), 28.f, 0.1f));
-	TestTrue(TEXT("Fixed-wing UAV: 90Wh at 83.1W is ~65 min"),
-		FMath::IsNearlyEqual(Battery::EnduranceMinutes(90.f, 83.1f), 65.f, 0.2f));
-	TestTrue(TEXT("Loitering munition: 50Wh at 200W is ~15 min"),
-		FMath::IsNearlyEqual(Battery::EnduranceMinutes(50.f, 200.f), 15.f, 0.05f));
+	// ---- Endurance of the four shipped archetypes, derived from their authored constants rather than
+	// from pre-computed loads, so that retuning an archetype and forgetting its README figure fails
+	// here. Each pack figure is the value set in the matching constructor.
+	{
+		// Rotorcraft: demand at hover is weight / total available thrust, then the rotor power curve.
+		const auto QuadEnduranceMinutes = [](const float MassKg, const float MotorThrustN, const float CapacityWh,
+			const float AvionicsW, const float MaxPropulsionW)
+		{
+			const float HoverDemand = Multirotor::HoverThrottle(MassKg, MotorThrustN * 4.f);
+			const float LoadW = AvionicsW + Battery::PropulsionLoadW(HoverDemand, MaxPropulsionW);
+			return Battery::EnduranceMinutes(CapacityWh, LoadW);
+		};
+
+		// Wings: the propeller only fights drag, so a settled cruise throttle maps onto the cruise curve.
+		const auto WingEnduranceMinutes = [](const float CruiseThrottle, const float CapacityWh,
+			const float AvionicsW, const float MaxPropulsionW)
+		{
+			const float LoadW = AvionicsW + Battery::CruisePropulsionLoadW(CruiseThrottle, MaxPropulsionW);
+			return Battery::EnduranceMinutes(CapacityWh, LoadW);
+		};
+
+		const float FPVMinutes = QuadEnduranceMinutes(1.2f, 8.f, 28.f, 8.f, 1200.f);
+		const float ReconMinutes = QuadEnduranceMinutes(0.92f, 5.5f, 60.f, 10.f, 450.f);
+		const float UAVMinutes = WingEnduranceMinutes(0.35f, 90.f, 12.f, 200.f);
+		const float MunitionMinutes = WingEnduranceMinutes(0.5f, 50.f, 14.f, 240.f);
+
+		TestTrue(TEXT("FPV kamikaze quad hovers for ~6 min"), FMath::IsNearlyEqual(FPVMinutes, 6.f, 0.3f));
+		TestTrue(TEXT("Recon quad hovers for ~28 min"), FMath::IsNearlyEqual(ReconMinutes, 28.f, 0.5f));
+		TestTrue(TEXT("Fixed-wing UAV cruises for ~66 min"), FMath::IsNearlyEqual(UAVMinutes, 66.f, 0.5f));
+		TestTrue(TEXT("Loitering munition cruises for ~22 min"), FMath::IsNearlyEqual(MunitionMinutes, 22.4f, 0.5f));
+
+		// The ordering is the point of the whole set: a wing outlasts a rotor, a scout outlasts a weapon.
+		TestTrue(TEXT("The wing outlasts every rotorcraft"), UAVMinutes > ReconMinutes);
+		TestTrue(TEXT("Each scout outlasts its armed counterpart"),
+			ReconMinutes > FPVMinutes && UAVMinutes > MunitionMinutes);
+	}
 
 	// ---- Integration agrees with the closed-form endurance: draining at a fixed load for the
 	// predicted flight time must land exactly on empty.
@@ -171,6 +198,22 @@ bool FForgeDroneBatteryTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Idle draws no propulsion power"), FMath::IsNearlyEqual(Battery::PropulsionLoadW(0.f, 1400.f), 0.f, 1e-4f));
 	TestTrue(TEXT("Load curve is monotonic"),
 		Battery::PropulsionLoadW(0.8f, 1400.f) > Battery::PropulsionLoadW(0.5f, 1400.f));
+
+	// ---- The wing's cruise curve is linear in throttle, not the rotor's thrust^1.5. Both agree at the
+	// ends; between them the rotor curve is the cheaper of the two, which is exactly why a wing must not
+	// borrow it - doing so would flatter its endurance at every part-throttle setting it ever cruises at.
+	TestTrue(TEXT("Cruise curve draws the rated power at full throttle"),
+		FMath::IsNearlyEqual(Battery::CruisePropulsionLoadW(1.f, 200.f), 200.f, 0.01f));
+	TestTrue(TEXT("Cruise curve draws nothing at idle"),
+		FMath::IsNearlyEqual(Battery::CruisePropulsionLoadW(0.f, 200.f), 0.f, 1e-4f));
+	TestTrue(TEXT("Cruise curve is linear in throttle"),
+		FMath::IsNearlyEqual(Battery::CruisePropulsionLoadW(0.35f, 200.f), 70.f, 0.01f));
+	TestTrue(TEXT("Cruise curve costs more than the rotor curve at part throttle"),
+		Battery::CruisePropulsionLoadW(0.35f, 200.f) > Battery::PropulsionLoadW(0.35f, 200.f));
+	TestTrue(TEXT("Cruise throttle clamps rather than over-drawing"),
+		FMath::IsNearlyEqual(Battery::CruisePropulsionLoadW(3.f, 200.f), 200.f, 0.01f));
+	TestTrue(TEXT("Negative throttle draws nothing"),
+		FMath::IsNearlyEqual(Battery::CruisePropulsionLoadW(-1.f, 200.f), 0.f, 1e-4f));
 
 	// ---- Degenerate input reports no endurance rather than infinity.
 	TestEqual(TEXT("Zero load reports zero endurance, not infinite"), Battery::EnduranceMinutes(50.f, 0.f), 0.f);

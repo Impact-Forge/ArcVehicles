@@ -99,8 +99,11 @@ protected:
 	UFUNCTION()
 	void OnRep_ChargeFraction();
 
-	/* Reads the owner's current propulsion demand. Multirotors report mean motor output. */
-	float GatherPropulsionDemand() const;
+	/**
+	 * Current propulsion draw in watts, read from the owning airframe and put through whichever power
+	 * curve that airframe obeys: the rotor curve for a multirotor, the cruise curve for a wing.
+	 */
+	float GatherPropulsionLoadW() const;
 
 	/* Pushes remaining power onto the airframe, so an empty pack actually stops the motors. */
 	void ApplyPowerScaleToOwner(float PowerScale) const;

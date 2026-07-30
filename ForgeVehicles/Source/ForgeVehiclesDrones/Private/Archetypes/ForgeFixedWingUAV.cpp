@@ -19,6 +19,25 @@ AForgeFixedWingUAV::AForgeFixedWingUAV(const FObjectInitializer& ObjectInitializ
 	ObjectInitializer.DoNotCreateDefaultSubobject(TEXT("OccupantExitPoint"));
 
 	ApplySmallAirframeTuning();
+
+	// ---- Endurance: about an hour. A wing carries its own weight, so cruise draw is a fraction of
+	// what a quad spends holding itself up, and that is the whole reason to use one for surveillance.
+	// At a nominal 0.35 cruise throttle this is 70 W of motor plus 12 W of avionics: 90 Wh / 82 W is
+	// a little over an hour.
+	Battery = CreateDefaultSubobject<UForgeDroneBatteryComponent>(TEXT("Battery"));
+	Battery->CapacityWh = 90.f;
+	Battery->AvionicsLoadW = 12.f;          // flight controller, radio, camera
+	Battery->MaxPropulsionLoadW = 200.f;
+	Battery->LowChargeThreshold = 0.3f;     // it has to fly a long way home
+
+	// ---- Link: the longest of the four, because range is what this airframe is for. Station-keeping
+	// resolves to an orbit on a wing (see UForgeDroneAutopilotComponent::SetMode), so losing the link
+	// leaves it circling where it was sent rather than abandoning the area.
+	Link = CreateDefaultSubobject<UForgeDroneLinkComponent>(TEXT("ControlLink"));
+	Link->MaxRangeM = 12000.f;
+	Link->LinkLossBehavior = EForgeDroneLinkLossBehavior::FailsafeHover;
+
+	Autopilot = CreateDefaultSubobject<UForgeDroneAutopilotComponent>(TEXT("Autopilot"));
 }
 
 void AForgeFixedWingUAV::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -63,11 +82,11 @@ void AForgeFixedWingUAV::BeginPlay()
 	Super::BeginPlay();
 
 	// Launch point doubles as the return-to-home point for link-loss failsafes.
-	if (UForgeDroneLinkComponent* Link = FindComponentByClass<UForgeDroneLinkComponent>())
+	if (Link)
 	{
 		Link->SetHomeLocation(GetActorLocation());
 	}
-	if (UForgeDroneAutopilotComponent* Autopilot = FindComponentByClass<UForgeDroneAutopilotComponent>())
+	if (Autopilot)
 	{
 		Autopilot->SetHomeLocation(GetActorLocation());
 	}
@@ -99,16 +118,13 @@ void AForgeFixedWingUAV::Launch()
 	const FVector LaunchVelocity = LaunchRotation.Vector() * LaunchSpeedMS * 100.f;
 	Body->SetPhysicsLinearVelocity(LaunchVelocity);
 
-	if (bOrbitAfterLaunch)
+	if (bOrbitAfterLaunch && Autopilot)
 	{
-		if (UForgeDroneAutopilotComponent* Autopilot = FindComponentByClass<UForgeDroneAutopilotComponent>())
-		{
-			// Loitering unattended over the launch point is the whole point of this class of drone.
-			FVector OrbitCentre = GetActorLocation();
-			OrbitCentre.Z += PostLaunchOrbitAltitudeM * 100.f;
-			Autopilot->SetOrbit(OrbitCentre, PostLaunchOrbitRadiusM, /*SpeedMS*/ 16.f);
-			Autopilot->SetMode(EForgeDroneAutopilotMode::Orbit);
-		}
+		// Loitering unattended over the launch point is the whole point of this class of drone.
+		FVector OrbitCentre = GetActorLocation();
+		OrbitCentre.Z += PostLaunchOrbitAltitudeM * 100.f;
+		Autopilot->SetOrbit(OrbitCentre, PostLaunchOrbitRadiusM, /*SpeedMS*/ 16.f);
+		Autopilot->SetMode(EForgeDroneAutopilotMode::Orbit);
 	}
 
 	OnLaunched.Broadcast();

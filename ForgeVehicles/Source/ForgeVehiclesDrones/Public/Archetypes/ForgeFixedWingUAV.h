@@ -7,6 +7,10 @@
 
 #include "ForgeFixedWingUAV.generated.h"
 
+class UForgeDroneAutopilotComponent;
+class UForgeDroneBatteryComponent;
+class UForgeDroneLinkComponent;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnForgeUAVLaunched);
 
 /**
@@ -68,10 +72,23 @@ public:
 	UFUNCTION(BlueprintPure, Category = "ForgeUAV|Launch")
 	bool HasLaunched() const { return bLaunched; }
 
+	UForgeDroneBatteryComponent* GetBattery() const { return Battery; }
+	UForgeDroneLinkComponent* GetLink() const { return Link; }
+	UForgeDroneAutopilotComponent* GetAutopilot() const { return Autopilot; }
+
 protected:
 
 	/* Applies the small-airframe rescales to the inherited aero model. */
 	virtual void ApplySmallAirframeTuning();
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UForgeDroneBatteryComponent> Battery;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UForgeDroneLinkComponent> Link;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UForgeDroneAutopilotComponent> Autopilot;
 
 	UPROPERTY(Replicated)
 	bool bLaunched = false;

@@ -6,12 +6,22 @@
 #include "Net/UnrealNetwork.h"
 #include "Payloads/ForgeDroneWarheadComponent.h"
 #include "Systems/ForgeDroneAutopilotComponent.h"
+#include "Systems/ForgeDroneBatteryComponent.h"
 #include "Systems/ForgeDroneLinkComponent.h"
 
 AForgeLoiteringMunition::AForgeLoiteringMunition(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// Re-run the tuning. The base constructor's call to this virtual dispatched to the base override,
+	// as a virtual call from a constructor always does, so our own version has not run yet. It only
+	// assigns tunables, so calling it twice is harmless - and skipping it silently loses the dive
+	// authority this airframe depends on.
+	ApplySmallAirframeTuning();
+
 	Warhead = CreateDefaultSubobject<UForgeDroneWarheadComponent>(TEXT("Warhead"));
+	Warhead->ArmDelaySeconds = 3.f;
+	Warhead->MinArmDistanceM = 50.f;
+	Warhead->bDestroyOwnerOnDetonate = true;
 
 	AirframeMassKg = 2.5f;
 	LaunchSpeedMS = 20.f;
@@ -20,6 +30,25 @@ AForgeLoiteringMunition::AForgeLoiteringMunition(const FObjectInitializer& Objec
 	bOrbitAfterLaunch = true;
 	PostLaunchOrbitRadiusM = 150.f;
 	PostLaunchOrbitAltitudeM = 120.f;
+
+	// ---- Endurance: around twenty minutes, not an hour. It is a quarter heavier than the scout on the
+	// same wing, and induced drag goes with the square of weight, so it works appreciably harder to
+	// stay up; it is also spent at the end of the sortie either way, so there is no reason to carry a
+	// pack sized to bring it home. At a nominal 0.5 cruise throttle: 120 W of motor plus 14 W of
+	// avionics against 50 Wh.
+	if (Battery)
+	{
+		Battery->CapacityWh = 50.f;
+		Battery->AvionicsLoadW = 14.f;        // avionics plus a live seeker and fuze
+		Battery->MaxPropulsionLoadW = 240.f;
+		Battery->LowChargeThreshold = 0.2f;   // it is not coming back, so warn later than the scout
+	}
+
+	// Slightly shorter link than the pure scout: it is used closer in, against a target already found.
+	if (Link)
+	{
+		Link->MaxRangeM = 10000.f;
+	}
 }
 
 void AForgeLoiteringMunition::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -53,9 +82,9 @@ void AForgeLoiteringMunition::BeginPlay()
 		Warhead->SetLaunchLocation(GetActorLocation());
 	}
 
-	// A munition that loses its link mid-loiter should keep flying and come home rather than hold
-	// station as a hovering explosive; if it has already committed, Continue is set at that point.
-	if (UForgeDroneLinkComponent* Link = FindComponentByClass<UForgeDroneLinkComponent>())
+	// A munition that loses its link mid-loiter should come home rather than circle unattended with a
+	// warhead aboard; if it has already committed, Continue is set at that point.
+	if (Link)
 	{
 		Link->LinkLossBehavior = EForgeDroneLinkLossBehavior::ReturnToHome;
 	}
@@ -68,7 +97,7 @@ void AForgeLoiteringMunition::CommitToTarget(const FVector& TargetLocation)
 		return;
 	}
 
-	if (UForgeDroneAutopilotComponent* Autopilot = FindComponentByClass<UForgeDroneAutopilotComponent>())
+	if (Autopilot)
 	{
 		Autopilot->SetDiveTarget(TargetLocation);
 		Autopilot->SetMode(EForgeDroneAutopilotMode::TerminalDive);
@@ -82,7 +111,7 @@ void AForgeLoiteringMunition::CommitToTarget(const FVector& TargetLocation)
 	}
 
 	// Once committed, losing the link must not turn the aircraft around - the run continues.
-	if (UForgeDroneLinkComponent* Link = FindComponentByClass<UForgeDroneLinkComponent>())
+	if (Link)
 	{
 		Link->LinkLossBehavior = EForgeDroneLinkLossBehavior::Continue;
 	}
@@ -102,7 +131,7 @@ void AForgeLoiteringMunition::CommitToTargetActor(AActor* TargetActor)
 		return;
 	}
 
-	if (UForgeDroneAutopilotComponent* Autopilot = FindComponentByClass<UForgeDroneAutopilotComponent>())
+	if (Autopilot)
 	{
 		Autopilot->SetDiveTargetActor(TargetActor);
 	}
@@ -128,7 +157,7 @@ bool AForgeLoiteringMunition::AbortAttack()
 		Warhead->Safe();
 	}
 
-	if (UForgeDroneAutopilotComponent* Autopilot = FindComponentByClass<UForgeDroneAutopilotComponent>())
+	if (Autopilot)
 	{
 		FVector OrbitCentre = GetActorLocation();
 		OrbitCentre.Z += PostLaunchOrbitAltitudeM * 100.f;
@@ -136,7 +165,7 @@ bool AForgeLoiteringMunition::AbortAttack()
 		Autopilot->SetMode(EForgeDroneAutopilotMode::Orbit);
 	}
 
-	if (UForgeDroneLinkComponent* Link = FindComponentByClass<UForgeDroneLinkComponent>())
+	if (Link)
 	{
 		Link->LinkLossBehavior = EForgeDroneLinkLossBehavior::ReturnToHome;
 	}

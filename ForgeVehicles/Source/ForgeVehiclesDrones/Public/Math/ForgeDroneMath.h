@@ -89,6 +89,19 @@ namespace ForgeDrone
 		 */
 		FORGEVEHICLESDRONES_API float PropulsionLoadW(float MeanMotorOutput, float MaxPropulsionW);
 
+		/**
+		 * Electrical load from a fixed-pitch propeller pulling a wing along in forward flight.
+		 *
+		 * Deliberately not the curve above. That one describes a rotor holding an aircraft up, where
+		 * shaft power climbs faster than thrust; a wing carries its own weight and the propeller only
+		 * has to overcome drag, so useful power is thrust x airspeed and throttle maps close to
+		 * linearly onto electrical draw at a settled cruise. Using the hover curve for a wing would
+		 * make it look implausibly efficient at part throttle and wildly overstate its endurance.
+		 *
+		 * @param Throttle Commanded throttle, [0, 1].
+		 */
+		FORGEVEHICLESDRONES_API float CruisePropulsionLoadW(float Throttle, float MaxPropulsionW);
+
 		/** Charge remaining after drawing LoadW for DeltaSeconds, clamped at empty. */
 		FORGEVEHICLESDRONES_API float IntegrateChargeWh(float CurrentWh, float LoadW, float DeltaSeconds);
 
