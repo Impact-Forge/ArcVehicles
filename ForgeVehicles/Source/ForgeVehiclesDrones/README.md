@@ -37,6 +37,7 @@ SI, so a 2 kg airframe is a retune, not a reimplementation.
 | `UForgeDroneGimbalComponent` | Two-axis world-stabilised camera mount. |
 | `UForgeDroneDropReleaseComponent` | Store release that inherits the aircraft's velocity and credits the operator. |
 | `UForgeDroneWarheadComponent` | Arm-delay + minimum-distance safety, contact and proximity fuzes, `OnDetonated`. |
+| `UForgeDroneOperatorComponent` | Hands a player control of the drone and puts them back in their own body afterwards. |
 | `ForgeDroneMath` | The pure maths: mixer, battery curves, link factors. Unit-tested, no engine state. |
 
 ## Archetype tuning
@@ -133,6 +134,39 @@ into on arrival.
 Regaining the link only hands control back if the failsafe was what took it: a pilot-commanded orbit
 or dive survives the signal flickering.
 
+## Flying one: the operator, and their body
+
+`UForgeDroneOperatorComponent` is present on every archetype. `TakeControl(Controller)` possesses the
+drone; `ReleaseControl()` gives the player their body back.
+
+**It is not the seat system, deliberately.** A seat attaches its occupant to the vehicle, hides them
+and disables their movement. That is right for a driver and wrong for a drone operator: the soldier
+stays standing exactly where they were, in the open, visible and shootable, holding a controller.
+Nothing here moves, hides or protects them, because that exposure is the price of using a drone. The
+parked body is kept owned by its own controller so it carries on replicating to that client — the
+operator can watch themselves being shot at.
+
+The body is also where the radio is: it is what gets passed to the link as the antenna, so range,
+terrain occlusion and jamming are all measured from the soldier rather than from the drone. Flying
+deep behind a ridge is therefore a decision, not a free move.
+
+Three things can go wrong, and each has a defined outcome:
+
+| | What happens |
+| --- | --- |
+| **The drone is destroyed** while being flown | The controller is handed back to its body in `EndPlay`, before the pawn goes away. Losing a drone must not leave a player staring at nothing. |
+| **The operator's body is destroyed** mid-flight | The antenna died with them, so the link goes dead and the aircraft runs its failsafe. By default the operator also loses the drone and is left pawnless — the same state any other death produces, for the project's death handling to pick up. Set `bReleaseControlOnOperatorBodyLost = false` to let them keep flying a radio-less aircraft. |
+| **Someone else tries to take a drone already being flown** | Refused with `AlreadyControlled`. A stale entry left by a disconnect does not lock the airframe out — only a live controller counts. |
+
+`TakeControl` is server-side and deliberately *not* a client RPC: until control is taken the drone is
+not owned by the operator's connection, so a request from that client would be dropped. Call it from
+something the player does own — a granted ability, an interaction on a deployed drone, or the item
+that carries it. Release is the opposite case and needs no glue: possession makes the drone
+connection-owned, so `ServerRequestRelease()` is callable straight from the client.
+
+An airframe nobody has ever taken does not run its failsafe, even though it has no link. Without that
+latch a recon quad sitting on the ground unclaimed would try to fly itself home.
+
 ## Setting up a drone
 
 1. Subclass the archetype in Blueprint. Set the mesh on `Core` and give it a collision primitive
@@ -148,7 +182,9 @@ or dive survives the signal flickering.
 4. For fixed-wing archetypes, add and tune the engine component as above.
 5. Call `Launch()` on the wings — they have no undercarriage and no runway. Give the quads `Battery`
    charge and let them lift off.
-6. Wire the warhead's `OnDetonated` to whatever resolves damage in your project. The module
+6. Give the player a way to reach `Operator->TakeControl(...)` on the server — an ability, an
+   interaction, or a deployment item.
+7. Wire the warhead's `OnDetonated` to whatever resolves damage in your project. The module
    deliberately carries no damage logic and no dependency on ForgeArmor; in BattleSpace that binding
    lives in `ForgeArmorVehicles`.
 

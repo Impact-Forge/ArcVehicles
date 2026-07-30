@@ -40,6 +40,10 @@ void UForgeDroneLinkComponent::SetOperator(AController* InOperatorController, AA
 	OperatorController = InOperatorController;
 	OperatorAntenna = InOperatorAntenna;
 
+	// Latched, never cleared: from here on the aircraft is one that has been flown, so releasing it
+	// deliberately does run the failsafe. Only an airframe that was never claimed is exempt.
+	bHasHadOperator = true;
+
 	// A freshly bound link starts healthy: the operator is standing next to the drone they just
 	// launched, and starting degraded would fire a spurious failsafe.
 	LinkQuality = 1.f;
@@ -80,6 +84,15 @@ void UForgeDroneLinkComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	}
 
 	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	// A drone nobody has ever flown is not a drone that lost its link. Without this, a deployed but
+	// unclaimed airframe would report zero quality (it has no antenna to measure to), trip its grace
+	// period and run its failsafe - so a recon quad sitting on the ground would try to fly itself home
+	// before anyone had picked it up.
+	if (!bHasHadOperator)
 	{
 		return;
 	}

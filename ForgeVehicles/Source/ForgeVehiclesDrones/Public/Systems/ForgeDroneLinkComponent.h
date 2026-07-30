@@ -192,6 +192,9 @@ protected:
 	bool bLinkLostReported = false;
 	bool bFailsafeEngaged = false;
 
+	/* Whether anyone has ever flown this aircraft. Until they have, there is no link to lose. */
+	bool bHasHadOperator = false;
+
 	/* Per-axis held values and remaining delay, for the degraded-input model. */
 	static constexpr int32 NumFilteredAxes = 6;
 	float HeldAxisValues[NumFilteredAxes] = { 0.f };

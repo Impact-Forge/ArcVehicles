@@ -10,6 +10,7 @@
 
 #include "ForgeMultirotorVehicle.generated.h"
 
+class UForgeDroneOperatorComponent;
 class URotorComponent;
 class UStaticMeshComponent;
 
@@ -176,6 +177,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "ForgeMultirotor|Flight")
 	const TArray<FForgeMultirotorMotor>& GetMotors() const { return Motors; }
 
+	/* How control of this aircraft is handed to a player and taken back. */
+	UFUNCTION(BlueprintPure, Category = "ForgeMultirotor|Operator")
+	UForgeDroneOperatorComponent* GetOperator() const { return Operator; }
+
 	/**
 	 * Fraction of rated thrust the motors can currently produce, [0, 1]. Systems that sap power
 	 * (a flat battery, a damaged ESC) drive this; zero means the aircraft falls.
@@ -197,6 +202,10 @@ protected:
 	/* Physics body. The inherited skeletal Mesh is cosmetic and re-parented under this. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UStaticMeshComponent> Core;
+
+	/* How a player takes and gives up control of the aircraft. Present on every multirotor here. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UForgeDroneOperatorComponent> Operator;
 
 	//~ Airframe -------------------------------------------------------------
 

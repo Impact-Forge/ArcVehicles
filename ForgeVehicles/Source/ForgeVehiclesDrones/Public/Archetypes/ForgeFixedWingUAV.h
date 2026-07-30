@@ -10,6 +10,7 @@
 class UForgeDroneAutopilotComponent;
 class UForgeDroneBatteryComponent;
 class UForgeDroneLinkComponent;
+class UForgeDroneOperatorComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnForgeUAVLaunched);
 
@@ -75,6 +76,7 @@ public:
 	UForgeDroneBatteryComponent* GetBattery() const { return Battery; }
 	UForgeDroneLinkComponent* GetLink() const { return Link; }
 	UForgeDroneAutopilotComponent* GetAutopilot() const { return Autopilot; }
+	UForgeDroneOperatorComponent* GetOperator() const { return Operator; }
 
 protected:
 
@@ -89,6 +91,10 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UForgeDroneAutopilotComponent> Autopilot;
+
+	/* How a player takes and gives up control of the aircraft. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UForgeDroneOperatorComponent> Operator;
 
 	UPROPERTY(Replicated)
 	bool bLaunched = false;

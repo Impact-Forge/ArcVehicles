@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "ForgeVehiclesDrones.h"
 #include "Net/UnrealNetwork.h"
+#include "Operator/ForgeDroneOperatorComponent.h"
 #include "Systems/ForgeDroneAutopilotComponent.h"
 #include "Systems/ForgeDroneBatteryComponent.h"
 #include "Systems/ForgeDroneLinkComponent.h"
@@ -38,6 +39,9 @@ AForgeFixedWingUAV::AForgeFixedWingUAV(const FObjectInitializer& ObjectInitializ
 	Link->LinkLossBehavior = EForgeDroneLinkLossBehavior::FailsafeHover;
 
 	Autopilot = CreateDefaultSubobject<UForgeDroneAutopilotComponent>(TEXT("Autopilot"));
+
+	// Nobody is aboard, so control has to be given to a player and taken back explicitly.
+	Operator = CreateDefaultSubobject<UForgeDroneOperatorComponent>(TEXT("Operator"));
 }
 
 void AForgeFixedWingUAV::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

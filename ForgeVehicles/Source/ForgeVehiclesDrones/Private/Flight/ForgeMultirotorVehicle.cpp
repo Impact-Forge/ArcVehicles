@@ -8,6 +8,7 @@
 #include "InputAction.h"
 #include "InputActionValue.h"
 #include "Net/UnrealNetwork.h"
+#include "Operator/ForgeDroneOperatorComponent.h"
 #include "RotorComponent.h"
 #include "Systems/ForgeWindSubsystem.h"
 
@@ -24,6 +25,10 @@ AForgeMultirotorVehicle::AForgeMultirotorVehicle(const FObjectInitializer& Objec
 
 	Core = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Core"));
 	SetRootComponent(Core);
+
+	// Every multirotor in this module is unmanned, so it always needs a way to be handed to a player and
+	// a way to give them back afterwards.
+	Operator = CreateDefaultSubobject<UForgeDroneOperatorComponent>(TEXT("Operator"));
 
 	// This class synchronises its own state, so engine movement replication would be a second,
 	// conflicting source of truth (same reasoning as the fixed-wing vehicle).
