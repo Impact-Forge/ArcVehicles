@@ -19,7 +19,7 @@ AForgeFixedWingUAV::AForgeFixedWingUAV(const FObjectInitializer& ObjectInitializ
 	ObjectInitializer.DoNotCreateDefaultSubobject(TEXT("RunOverComponent"));
 	ObjectInitializer.DoNotCreateDefaultSubobject(TEXT("OccupantExitPoint"));
 
-	ApplySmallAirframeTuning();
+	AForgeFixedWingUAV::ApplySmallAirframeTuning();
 
 	// ---- Endurance: about an hour. A wing carries its own weight, so cruise draw is a fraction of
 	// what a quad spends holding itself up, and that is the whole reason to use one for surveillance.

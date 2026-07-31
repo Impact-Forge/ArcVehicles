@@ -8,14 +8,15 @@
 
 static const float K2FW_GRAVITY = 9.81f; // m/s^2
 
-AForgeFixedWingVehicle::AForgeFixedWingVehicle()
+AForgeFixedWingVehicle::AForgeFixedWingVehicle(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
 	PrimaryActorTick.bCanEverTick = true;
 
 	// Replication is opt-in via ReplicationMethod, but we register as a replicated actor and disable the
 	// engine's built-in movement replication because state is synced manually (see ServerStateSync).
 	bReplicates = true;
-	SetReplicateMovement(false);
+	AActor::SetReplicateMovement(false);
 
 	Core = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Core"));
 	RootComponent = Core;

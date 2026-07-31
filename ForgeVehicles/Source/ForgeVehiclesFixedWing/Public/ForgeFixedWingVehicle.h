@@ -88,7 +88,7 @@ class FORGEVEHICLESFIXEDWING_API AForgeFixedWingVehicle : public AForgeVehicle, 
 	GENERATED_BODY()
 
 public:
-	AForgeFixedWingVehicle();
+	AForgeFixedWingVehicle(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	//~ Begin IForgeVehicleMovementInterface — SetThrottleInput is satisfied by the class' own throttle
 	// control; steering banks the aircraft and vertical drives the elevator.

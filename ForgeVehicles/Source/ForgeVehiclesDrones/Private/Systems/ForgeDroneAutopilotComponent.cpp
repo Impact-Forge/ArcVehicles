@@ -66,6 +66,18 @@ void UForgeDroneAutopilotComponent::BeginPlay()
 	SetComponentTickEnabled(GetOwner() && GetOwner()->HasAuthority());
 }
 
+void UForgeDroneAutopilotComponent::Activate(bool bReset)
+{
+	Super::Activate(bReset);
+	SetActiveFlag(Mode != EForgeDroneAutopilotMode::Manual);
+}
+
+void UForgeDroneAutopilotComponent::Deactivate()
+{
+	Super::Deactivate();
+	SetActiveFlag(Mode != EForgeDroneAutopilotMode::Manual);
+}
+
 void UForgeDroneAutopilotComponent::SetMode(const EForgeDroneAutopilotMode NewMode)
 {
 	bEngagedByFailsafe = false;

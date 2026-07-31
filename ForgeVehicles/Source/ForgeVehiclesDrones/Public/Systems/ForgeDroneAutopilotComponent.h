@@ -51,6 +51,8 @@ public:
 
 	//~ Begin UActorComponent interface
 	virtual void BeginPlay() override;
+	virtual void Activate(bool bReset = false) override;
+	virtual void Deactivate() override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	// End UActorComponent interface
 
@@ -69,9 +71,6 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "ForgeDrone|Autopilot")
 	bool WasEngagedByFailsafe() const { return bEngagedByFailsafe; }
-
-	UFUNCTION(BlueprintPure, Category = "ForgeDrone|Autopilot")
-	bool IsActive() const { return Mode != EForgeDroneAutopilotMode::Manual; }
 
 	/* Circle to fly: centre, radius in metres, ground speed in m/s. */
 	UFUNCTION(BlueprintCallable, Category = "ForgeDrone|Autopilot")

@@ -7,7 +7,9 @@
 
 #include "ForgeDroneDropReleaseComponent.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnForgeDroneStoreReleased, AActor*, ReleasedActor, int32, RemainingStores);
+class AController;
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnForgeDroneStoreReleased, AActor*, ReleasedActor, int32, RemainingStores)
+;
 
 /**
  * Releases carried stores - grenades, submunitions, supplies - from a drone in flight.

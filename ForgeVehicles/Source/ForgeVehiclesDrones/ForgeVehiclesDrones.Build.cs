@@ -26,6 +26,7 @@ public class ForgeVehiclesDrones : ModuleRules
 				// Fixed-wing drones (recon UAV, loitering munition) are configured subclasses of the
 				// existing fixed-wing vehicle - its aero model already scales down to small airframes.
 				"ForgeVehiclesFixedWing",
+				"TBIA_Runtime"
 			}
 		);
 
