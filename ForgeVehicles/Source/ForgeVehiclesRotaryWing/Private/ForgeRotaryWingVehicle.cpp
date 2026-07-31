@@ -19,6 +19,10 @@ AForgeRotaryWingVehicle::AForgeRotaryWingVehicle()
 	TransformedAxis = CreateDefaultSubobject<USceneComponent>(TEXT("Transform"));
 	TransformedAxis->SetupAttachment(RootComponent);
 
+	// This class synchronises its own state through FForgeRotaryWingServerState, so engine movement
+	// replication (inherited on from AForgeVehicle) would be a second, conflicting source of truth.
+	// Matches how the fixed-wing vehicle sets itself up.
+	SetReplicateMovement(false);
 }
 
 // Called when the game starts or when spawned
@@ -214,12 +218,20 @@ void AForgeRotaryWingVehicle::Tick(float DeltaTime)
 
 #pragma region Rotors
 
+	// Rotor thrust must follow the same authority rule as UpdatePhysics above. When the vehicle is
+	// server-synced (ERT_K2 / ERT_DataOnly), a simulating client applying its own rotor forces fights
+	// the incoming state every frame. Animation still runs everywhere - it is purely visual.
+	const bool bApplyRotorPhysics =
+		ReplicationMethod == EForgeRotaryWingReplicationType::ERT_None || HasAuthority();
+
 	for (int i = 0; i < Rotors.Num(); i++)
 	{
-
 		Rotors[i]->UpdateAnimation(Velocity, TakeOffRatio);
 
-		Rotors[i]->UpdatePhysics(GameThreadDeltaTime, Core, TakeOffRatio);
+		if (bApplyRotorPhysics)
+		{
+			Rotors[i]->UpdatePhysics(GameThreadDeltaTime, Core, TakeOffRatio);
+		}
 	}
 
 #pragma endregion

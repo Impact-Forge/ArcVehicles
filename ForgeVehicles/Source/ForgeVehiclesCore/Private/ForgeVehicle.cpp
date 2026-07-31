@@ -5,8 +5,13 @@
 #include "ForgeVehicleExitPoint.h"
 #include "Interfaces/ForgeVehicleMovementInterface.h"
 #include "Seats/ForgeSeatConfig.h"
+#include "Components/ForgeVehicleLightComponent.h"
 #include "Components/ForgeVehicleRunOverComponent.h"
+#include "GAS/ForgeVehicleAttributeSet.h"
 #include "ArcInventoryComponent.h"
+
+#include "AbilitySystemComponent.h"
+#include "Abilities/GameplayAbility.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Pawn.h"
@@ -53,6 +58,129 @@ AForgeVehicle::AForgeVehicle(const FObjectInitializer& ObjectInitializer)
 	RunOverComponent = CreateDefaultSubobject<UForgeVehicleRunOverComponent>(TEXT("RunOverComponent"));
 
 	VehicleInventory = CreateDefaultSubobject<UArcInventoryComponent>(TEXT("VehicleInventory"));
+
+	// The vehicle owns its ability system rather than borrowing an occupant's, so vehicle state
+	// outlives crew changes and works on unmanned platforms. Mixed replication: the possessing
+	// client gets full fidelity, everyone else only what they need to predict/observe.
+	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->SetIsReplicated(true);
+		AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
+	}
+
+	VehicleAttributes = CreateDefaultSubobject<UForgeVehicleAttributeSet>(TEXT("VehicleAttributes"));
+}
+
+UAbilitySystemComponent* AForgeVehicle::GetAbilitySystemComponent() const
+{
+	return AbilitySystemComponent;
+}
+
+void AForgeVehicle::InitializeAbilitySystem()
+{
+	if (!AbilitySystemComponent)
+	{
+		return;
+	}
+
+	// Owner and avatar are both the vehicle: it is its own gameplay actor.
+	AbilitySystemComponent->InitAbilityActorInfo(this, this);
+
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	for (const TSubclassOf<UGameplayAbility>& Ability : DefaultAbilities)
+	{
+		if (!IsValid(Ability))
+		{
+			continue;
+		}
+		// Granted with the vehicle as SourceObject so UForgeVehicleAbility::GetOwningVehicle resolves
+		// even when the ability instance is activated through an occupant's ability system.
+		FGameplayAbilitySpec Spec(Ability, 1, INDEX_NONE, this);
+		Spec.SourceObject = this;
+		AbilitySystemComponent->GiveAbility(Spec);
+	}
+}
+
+void AForgeVehicle::BeginPlay()
+{
+	Super::BeginPlay();
+	InitializeAbilitySystem();
+}
+
+void AForgeVehicle::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+	// Re-point actor info so the new controller becomes the ability system's owning connection.
+	InitializeAbilitySystem();
+}
+
+void AForgeVehicle::OnRep_Controller()
+{
+	Super::OnRep_Controller();
+	InitializeAbilitySystem();
+}
+
+void AForgeVehicle::GetLightsOfType(const EForgeVehicleLightType LightType, TArray<UForgeVehicleLightComponent*>& OutLights) const
+{
+	OutLights.Reset();
+
+	TInlineComponentArray<UForgeVehicleLightComponent*> Lights(this);
+	for (UForgeVehicleLightComponent* Light : Lights)
+	{
+		if (IsValid(Light) && Light->LightType == LightType)
+		{
+			OutLights.Add(Light);
+		}
+	}
+}
+
+void AForgeVehicle::SetLightsOfType(const EForgeVehicleLightType LightType, const bool bOn)
+{
+	TArray<UForgeVehicleLightComponent*> Lights;
+	GetLightsOfType(LightType, Lights);
+
+	for (UForgeVehicleLightComponent* Light : Lights)
+	{
+		Light->SetLightOn(bOn);
+	}
+}
+
+void AForgeVehicle::ToggleLightsOfType(const EForgeVehicleLightType LightType)
+{
+	TArray<UForgeVehicleLightComponent*> Lights;
+	GetLightsOfType(LightType, Lights);
+
+	if (Lights.Num() == 0)
+	{
+		return;
+	}
+
+	// Drive the whole group from the first fixture's state so a group can never end up split.
+	const bool bNewState = !Lights[0]->IsLightOn();
+	for (UForgeVehicleLightComponent* Light : Lights)
+	{
+		Light->SetLightOn(bNewState);
+	}
+}
+
+bool AForgeVehicle::AreLightsOfTypeOn(const EForgeVehicleLightType LightType) const
+{
+	TArray<UForgeVehicleLightComponent*> Lights;
+	GetLightsOfType(LightType, Lights);
+
+	for (const UForgeVehicleLightComponent* Light : Lights)
+	{
+		if (Light->IsLightOn())
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 bool AForgeVehicle::IsAvailableForInteraction_Implementation(const UPrimitiveComponent* InteractedComponent, const AActor* InteractingActor) const
@@ -126,28 +254,114 @@ void AForgeVehicle::PawnClientRestart()
 	UpdateDriverInputMapping(true);
 }
 
-void AForgeVehicle::UpdateDriverInputMapping(bool bAdd)
+void AForgeVehicle::NotifyControllerChanged()
 {
-	if (!DriverMappingContext)
+	Super::NotifyControllerChanged();
+
+	// Possession has already moved by the time this fires. If the contexts are still applied to a
+	// controller that is no longer driving us, take them back. Without this, a raw UnPossess (one
+	// that never runs the seat-exit path) leaves the vehicle's input contexts stuck on the player.
+	APlayerController* PreviousPC = DriverInputController.Get();
+	if (PreviousPC && PreviousPC != GetController())
+	{
+		UpdateDriverInputMapping(false, PreviousPC);
+	}
+}
+
+void AForgeVehicle::UpdateDriverInputMapping(bool bAdd, APlayerController* ForController)
+{
+	if (!VehicleBaseMappingContext && !DriverMappingContext)
 	{
 		return;
 	}
 
-	if (const APlayerController* PC = Cast<APlayerController>(GetController()))
+	APlayerController* PC = ForController ? ForController : Cast<APlayerController>(GetController());
+	if (!PC)
 	{
-		if (const ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
+		return;
+	}
+
+	const ULocalPlayer* LocalPlayer = PC->GetLocalPlayer();
+	if (!LocalPlayer)
+	{
+		return;
+	}
+
+	UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
+	if (!Subsystem)
+	{
+		return;
+	}
+
+	// Layered: the shared vehicle context sits underneath so a vehicle can override individual binds
+	// without having to restate the common controls.
+	if (bAdd)
+	{
+		if (VehicleBaseMappingContext)
 		{
-			if (UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
-			{
-				if (bAdd)
-				{
-					Subsystem->AddMappingContext(DriverMappingContext, DriverMappingPriority);
-				}
-				else
-				{
-					Subsystem->RemoveMappingContext(DriverMappingContext);
-				}
-			}
+			Subsystem->AddMappingContext(VehicleBaseMappingContext, VehicleBaseMappingPriority);
+		}
+		if (DriverMappingContext)
+		{
+			Subsystem->AddMappingContext(DriverMappingContext, DriverMappingPriority);
+		}
+		DriverInputController = PC;
+	}
+	else
+	{
+		if (DriverMappingContext)
+		{
+			Subsystem->RemoveMappingContext(DriverMappingContext);
+		}
+		if (VehicleBaseMappingContext)
+		{
+			Subsystem->RemoveMappingContext(VehicleBaseMappingContext);
+		}
+		if (DriverInputController == PC)
+		{
+			DriverInputController.Reset();
+		}
+	}
+}
+
+void AForgeVehicle::UpdateSeatInputMapping(APlayerState* Player, UForgeVehicleSeatConfig* Seat, bool bAdd)
+{
+	FForgeSeatData SeatData;
+	if (!IsValid(Player) || !GetSeatData(Seat, SeatData) || SeatData.InputMappingContext.IsNull())
+	{
+		return;
+	}
+
+	// Input contexts are per-local-player, so only the machine that owns this occupant does anything.
+	const APlayerController* PC = Cast<APlayerController>(Player->GetOwner());
+	if (!PC || !PC->IsLocalController())
+	{
+		return;
+	}
+
+	const ULocalPlayer* LocalPlayer = PC->GetLocalPlayer();
+	if (!LocalPlayer)
+	{
+		return;
+	}
+
+	UEnhancedInputLocalPlayerSubsystem* Subsystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
+	if (!Subsystem)
+	{
+		return;
+	}
+
+	// Seat contexts are authored as soft refs; a synchronous load is acceptable here because seat
+	// changes are discrete, player-driven events rather than per-frame work.
+	if (UInputMappingContext* Context = SeatData.InputMappingContext.LoadSynchronous())
+	{
+		if (bAdd)
+		{
+			Subsystem->AddMappingContext(Context, SeatData.InputMappingPriority);
+		}
+		else
+		{
+			Subsystem->RemoveMappingContext(Context);
 		}
 	}
 }
@@ -249,9 +463,27 @@ void AForgeVehicle::NotifyPlayerSeatChangeEvent_Implementation(APlayerState* Pla
 {
 	Super::NotifyPlayerSeatChangeEvent_Implementation(Player, ToSeat, FromSeat, SeatChangeEvent);
 
-	// When the locally controlled occupant leaves the driver seat, drop the driver mapping context.
+	// When the locally controlled occupant leaves the driver seat, drop the driver mapping contexts.
 	if (SeatChangeEvent == EForgeVehicleSeatChangeType::ExitVehicle && FromSeat && FromSeat->IsDriverSeat())
 	{
 		UpdateDriverInputMapping(false);
+	}
+
+	// Per-seat contexts: swap the occupant's seat layer to match the seat they are now in. This is
+	// what lets a gunner or specialist station carry different controls to the driver's.
+	switch (SeatChangeEvent)
+	{
+	case EForgeVehicleSeatChangeType::EnterVehicle:
+		UpdateSeatInputMapping(Player, ToSeat, true);
+		break;
+	case EForgeVehicleSeatChangeType::SwitchSeats:
+		UpdateSeatInputMapping(Player, FromSeat, false);
+		UpdateSeatInputMapping(Player, ToSeat, true);
+		break;
+	case EForgeVehicleSeatChangeType::ExitVehicle:
+		UpdateSeatInputMapping(Player, FromSeat, false);
+		break;
+	default:
+		break;
 	}
 }

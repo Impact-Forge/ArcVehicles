@@ -88,7 +88,7 @@ class FORGEVEHICLESFIXEDWING_API AForgeFixedWingVehicle : public AForgeVehicle, 
 	GENERATED_BODY()
 
 public:
-	AForgeFixedWingVehicle();
+	AForgeFixedWingVehicle(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	//~ Begin IForgeVehicleMovementInterface — SetThrottleInput is satisfied by the class' own throttle
 	// control; steering banks the aircraft and vertical drives the elevator.
@@ -251,6 +251,13 @@ private:
 	float TiltAlpha = 0.f;      // current tilt (interpolated).
 
 protected:
+
+	/**
+	 * The physics body, for subclasses that need to configure it before BeginPlay reads its mass.
+	 * Small airframes in particular must set an explicit mass override: a light UAV's auto-computed
+	 * mass from collision volume is never the intended value.
+	 */
+	UStaticMeshComponent* GetCore() const { return Core; }
 
 	// ---- Control authority ------------------------------------------------------------------------
 

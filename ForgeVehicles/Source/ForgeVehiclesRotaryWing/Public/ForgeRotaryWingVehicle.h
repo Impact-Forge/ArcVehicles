@@ -80,6 +80,8 @@ public:
 	virtual void SetThrottleInput(float Value) override { SetPitchInput(Value); }     // forward cyclic
 	virtual void SetSteeringInput(float Value) override { SetYawInput(Value); }        // tail-rotor yaw
 	virtual void SetVerticalInput(float Value) override { SetElevatorInput(Value); }   // collective
+	virtual void SetRollAxisInput(float Value) override { SetRollInput(Value); }       // lateral cyclic
+	virtual void SetYawAxisInput(float Value) override { SetYawInput(Value); }         // pedals
 	virtual void StartEngine() override { SetControllable(true); bForgeEngineRunning = true; }
 	virtual void StopEngine() override { SetControllable(false); bForgeEngineRunning = false; }
 	virtual bool IsEngineRunning() const override { return bForgeEngineRunning; }

@@ -230,7 +230,9 @@ UForgeVehicleSeatConfig* AForgeBaseVehicle::FindSeatContainingPlayer(APlayerStat
 
 	for (UForgeVehicleSeatConfig* Config : AllSeats)
 	{
-		if (Config->PlayerInSeat == Player)
+		// Seat arrays can legitimately contain nulls: a vehicle may declare no driver seat at all
+		// (unmanned platforms), or have unassigned additional-seat entries on its Blueprint.
+		if (IsValid(Config) && Config->PlayerInSeat == Player)
 		{
 			return Config;
 		}
