@@ -47,7 +47,12 @@ AForgeVehicle::AForgeVehicle(const FObjectInitializer& ObjectInitializer)
 		}
 	}
 
-	OccupantExitPoint = CreateDefaultSubobject<UForgeVehicleExitPoint>(TEXT("OccupantExitPoint"));
+	// The next three are optional rather than required. Everything deriving from this class is a
+	// vehicle, but not everything is a crewed one: the drone archetypes suppress these with
+	// DoNotCreateDefaultSubobject, and the engine only honours that against subobjects created as
+	// optional - a required subobject is built anyway and the suppression is logged and ignored.
+	// Consequently these three can be null on any subclass and every use must check.
+	OccupantExitPoint = CreateOptionalDefaultSubobject<UForgeVehicleExitPoint>(TEXT("OccupantExitPoint"));
 	if (OccupantExitPoint && Mesh)
 	{
 		OccupantExitPoint->SetupAttachment(Mesh);
@@ -55,9 +60,9 @@ AForgeVehicle::AForgeVehicle(const FObjectInitializer& ObjectInitializer)
 
 	IgnitionComponent = CreateDefaultSubobject<UForgeEngineIgnitionComponent>(TEXT("IgnitionComponent"));
 
-	RunOverComponent = CreateDefaultSubobject<UForgeVehicleRunOverComponent>(TEXT("RunOverComponent"));
+	RunOverComponent = CreateOptionalDefaultSubobject<UForgeVehicleRunOverComponent>(TEXT("RunOverComponent"));
 
-	VehicleInventory = CreateDefaultSubobject<UArcInventoryComponent>(TEXT("VehicleInventory"));
+	VehicleInventory = CreateOptionalDefaultSubobject<UArcInventoryComponent>(TEXT("VehicleInventory"));
 
 	// The vehicle owns its ability system rather than borrowing an occupant's, so vehicle state
 	// outlives crew changes and works on unmanned platforms. Mixed replication: the possessing

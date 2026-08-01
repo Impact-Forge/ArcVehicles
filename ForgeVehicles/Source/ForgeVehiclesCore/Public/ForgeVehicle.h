@@ -78,7 +78,7 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "ForgeVehicle|Interaction")
 	void OnVehicleInteracted(AActor* InteractingActor);
 
-	/* The vehicle's inventory (cargo / stored items). */
+	/* Both are optional subobjects and are null on subclasses that suppress them - check before use. */
 	UForgeVehicleRunOverComponent* GetRunOverComponent() const { return RunOverComponent; }
 	UArcInventoryComponent* GetVehicleInventory() const { return VehicleInventory; }
 
@@ -155,7 +155,7 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	USkeletalMeshComponent* Mesh;
 
-	/* Default point occupants are placed at when they leave the vehicle. */
+	/* Default point occupants are placed at when they leave the vehicle. Null on uncrewed subclasses. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UForgeVehicleExitPoint* OccupantExitPoint;
 
@@ -163,11 +163,11 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UForgeEngineIgnitionComponent* IgnitionComponent;
 
-	/* Detects and damages pawns the vehicle runs over. */
+	/* Detects and damages pawns the vehicle runs over. Null on subclasses too light to run anything over. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UForgeVehicleRunOverComponent* RunOverComponent;
 
-	/* Arc Inventory storage carried by the vehicle (cargo / mounted equipment). */
+	/* Arc Inventory storage carried by the vehicle (cargo / mounted equipment). Null on subclasses with no hold. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UArcInventoryComponent* VehicleInventory;
 

@@ -10,14 +10,16 @@
 #include "Systems/ForgeDroneLinkComponent.h"
 
 AForgeReconQuad::AForgeReconQuad(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
-{
 	// A sub-kilogram airframe has no cargo hold and nobody boards it. It also should not injure
 	// anything by touching it, unlike the strike quad.
-	ObjectInitializer.DoNotCreateDefaultSubobject(TEXT("VehicleInventory"));
-	ObjectInitializer.DoNotCreateDefaultSubobject(TEXT("RunOverComponent"));
-	ObjectInitializer.DoNotCreateDefaultSubobject(TEXT("OccupantExitPoint"));
-
+	// This belongs in the initialization list, not the body: AForgeVehicle creates these subobjects
+	// in its own constructor, which has already finished by the time the body runs. The engine
+	// asserts on any subobject setup made after that point.
+	: Super(ObjectInitializer
+		.DoNotCreateDefaultSubobject(TEXT("VehicleInventory"))
+		.DoNotCreateDefaultSubobject(TEXT("RunOverComponent"))
+		.DoNotCreateDefaultSubobject(TEXT("OccupantExitPoint")))
+{
 	// ---- Airframe: ~350 mm diagonal, four modest motors. Thrust-to-weight around 2.4, which is
 	// plenty for a camera platform and keeps it from being twitchy.
 	ArmLengthCm = 16.f;

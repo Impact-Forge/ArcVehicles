@@ -25,7 +25,7 @@ public:
 	bool bIgnoreAnyRestrictions;
 
 	UPROPERTY()
-	APlayerState* Player;
+	APlayerState* Player = nullptr;
 
 };
 

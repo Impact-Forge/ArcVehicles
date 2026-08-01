@@ -8,13 +8,15 @@
 #include "Systems/ForgeDroneLinkComponent.h"
 
 AForgeFPVKamikazeQuad::AForgeFPVKamikazeQuad(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
-{
 	// No cargo, no exit point - but the run-over component is deliberately kept. A five-inch quad
 	// arriving at forty metres a second is a physical impact whether or not the warhead functions.
-	ObjectInitializer.DoNotCreateDefaultSubobject(TEXT("VehicleInventory"));
-	ObjectInitializer.DoNotCreateDefaultSubobject(TEXT("OccupantExitPoint"));
-
+	// This belongs in the initialization list, not the body: AForgeVehicle creates these subobjects
+	// in its own constructor, which has already finished by the time the body runs. The engine
+	// asserts on any subobject setup made after that point.
+	: Super(ObjectInitializer
+		.DoNotCreateDefaultSubobject(TEXT("VehicleInventory"))
+		.DoNotCreateDefaultSubobject(TEXT("OccupantExitPoint")))
+{
 	// ---- Airframe: ~250 mm diagonal five-inch class. Thrust-to-weight near 2.7 including the
 	// warhead, which is what gives it the acceleration to run in.
 	ArmLengthCm = 12.f;

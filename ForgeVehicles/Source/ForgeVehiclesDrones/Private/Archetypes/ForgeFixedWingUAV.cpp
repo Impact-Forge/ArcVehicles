@@ -11,14 +11,16 @@
 #include "Systems/ForgeDroneLinkComponent.h"
 
 AForgeFixedWingUAV::AForgeFixedWingUAV(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
-{
 	// A 2 kg airframe has no cargo hold, no one to run over and nobody to board it.
 	// Suppressing these keeps a hand-launched drone from carrying a crewed vehicle's baggage.
-	ObjectInitializer.DoNotCreateDefaultSubobject(TEXT("VehicleInventory"));
-	ObjectInitializer.DoNotCreateDefaultSubobject(TEXT("RunOverComponent"));
-	ObjectInitializer.DoNotCreateDefaultSubobject(TEXT("OccupantExitPoint"));
-
+	// This belongs in the initialization list, not the body: AForgeVehicle creates these subobjects
+	// in its own constructor, which has already finished by the time the body runs. The engine
+	// asserts on any subobject setup made after that point.
+	: Super(ObjectInitializer
+		.DoNotCreateDefaultSubobject(TEXT("VehicleInventory"))
+		.DoNotCreateDefaultSubobject(TEXT("RunOverComponent"))
+		.DoNotCreateDefaultSubobject(TEXT("OccupantExitPoint")))
+{
 	AForgeFixedWingUAV::ApplySmallAirframeTuning();
 
 	// ---- Endurance: about an hour. A wing carries its own weight, so cruise draw is a fraction of
